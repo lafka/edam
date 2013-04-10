@@ -1,0 +1,37 @@
+#!/usr/bin/env escript
+
+%% -*- mode: erlang;
+%% ex: ft=erlang et
+
+-define(lib(Name, Vsn), "lib/" ++ Name ++ $- ++ Vsn).
+
+-include("../src/epm.hrl").
+
+main([]) ->
+    usage();
+main(Args) ->
+    try
+        lists:foreach(
+              fun(Target) -> target(Target) end
+            , [ X || [Y|_] = X <- Args, Y =/= $-])
+    catch C:R ->
+        epm_utils:err("aaaah fuuuuuck something broke :(~n~n"
+            "error: ~p~n"
+            "reason: ~p~n"
+            "trace: ~p~n", [C, R, erlang:get_stacktrace()])
+    end.
+
+usage() ->
+    io:format("usage: epm {build|deps}~n").
+
+target("build") ->
+    epm_utils:info("building~n");
+
+target("deps") ->
+    epm_utils:info("fetching deps"),
+    Cfg = epm:config(),
+    lists:foreach(fun(#dep{name = Name} = Dep) ->
+        Dep2 = epm_deps:match_repos(Dep, Cfg2),
+        epm_deps:update(Dep2, Cfg2)
+       end, Cfg2#cfg.deps),
+    ok.
