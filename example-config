@@ -1,0 +1,20 @@
+% Set the repositories to only include expm.co
+repositories <-
+	https://expm.co
+
+% Append some github repositories, it's important to note that repos
+% gets a identifier, in the case above it's the domain name. Here we 
+% add explicitly set the identifier:
+repositories <<
+	local        <- git@git:.
+	github-lafka <- git://github.com/lafka
+	github-basho <- git://github.com/basho
+
+% When setting it can also take a list
+% Dependencies can do the following:
+%  use a specific ref     -> #(dep) : #(ref)
+%  validate built version -> #(dep) = #(version)
+%  Use a specific repo    -> #(dep) @ #(repo identifier)
+dependencies <-
+	lager  =1.2.1 @basho
+	tavern @github-lafka
