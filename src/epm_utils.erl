@@ -77,15 +77,10 @@ cmd(Cmd, Args) ->
 -spec cmd(iolist(), [term()], string()) -> {ok, Out} | {error, {non_neg_integer(), Out}}.
 cmd(Cmd, Args, Path) ->
 	Closure = case file:get_cwd() of
-		{ok, Path} ->
-			fun() -> ok end;
+		{ok, Path} -> fun() -> ok end;
 		{ok, OldCwd} ->
-			debug("set cwd: ~s", [Path]),
 			ok = file:set_cwd(Path),
-			fun() ->
-				debug("reset cwd: ~s", [OldCwd]),
-				ok = file:set_cwd(OldCwd)
-			end end,
+			fun() -> ok = file:set_cwd(OldCwd) end end,
 	File = mktemp("epm-eval"),
 	Cmd2 = io_lib:format(Cmd, Args),
 	Cmd3 = io_lib:format("~s > ~s 2>&1; echo $?", [Cmd2, File]),
