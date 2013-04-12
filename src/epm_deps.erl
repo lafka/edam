@@ -63,7 +63,7 @@ update(#dep{repo = [{Repo, Backend, URL}|_], name = Name, ref = Ref}) ->
 	case filelib:is_dir(Path) of
 		true ->
 			epm_utils:info("using local copy of ~s@~s from ~s~n", [Name, Repo, Path]),
-			Backend:update(Path, Repo, URL, Ref, true);
+			Backend:update(Path, Repo, URL, Ref);
 		false ->
 			epm_utils:debug("creating local copy of ~s @ ~s from ~s", [Name, Repo, URL]),
 			Backend:clone(Path, Repo, URL, Ref)

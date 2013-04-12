@@ -7,6 +7,7 @@
 	, clone/4
 	, update/4
 	, status/4
+	, status/5
 	]).
 
 -import(epm_utils, [
@@ -59,6 +60,9 @@ update(Path, Repo, URL, Ref) ->
 
 status(Path, Repo, URL, Dep) ->
 	epm_backend_git:status(Path, Repo, URL, Dep).
+
+status(Path, Repo, URL, Dep, Check) ->
+	epm_backend_git:status(Path, Repo, URL, Dep, Check).
 
 lookup_repos(Alias, User) ->
 	lookup_repos(Alias, User, []).
