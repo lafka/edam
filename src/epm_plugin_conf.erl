@@ -50,7 +50,7 @@ parse_dep(Arg) ->
 					{NewPos, Dep#dep{version = Opt}}
 			end
 		end, {size(Name), #dep{name = Name}}, Opts),
-	Ret.
+		Ret.
 
 add_dep(#cfg{deps = Deps, paths = Paths} = Cfg, Dep) ->
 	Cfg#cfg{

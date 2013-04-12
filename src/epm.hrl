@@ -1,3 +1,8 @@
+%% consistency.incomplete -> no suitable publishers found
+%% consistency.missing    -> remote found, no local copy
+%% consistency.unknown    -> local copy found, needs cloning
+%% consistency.stale      -> local copy found, remote has update
+%% consistency.consistent -> local copy found, is up to date
 -record(dep, {
 	  name  :: binary()
 	, repo = [] :: [{binary(), URL::binary()}] %% Repos containing a match
@@ -5,6 +10,7 @@
 	, version = any :: string() | any
 	, ref = any :: string() | any
 	, deps = [] :: [#dep{}]
+	, consistency = incomplete :: incomplete | unknown | stale | consistent
 	}).
 
 -record(cfg, {

@@ -5,6 +5,7 @@
 	, show/1
 	, show/2
 	, update/1
+	, consistent/1
 	]).
 
 -include("epm.hrl").
@@ -66,3 +67,23 @@ update(#dep{repo = [{Repo, Backend, URL}|_], name = Name, ref = Ref}) ->
 			epm_utils:debug("creating local copy of ~s @ ~s from ~s", [Name, Repo, URL]),
 			Backend:clone(Path, Repo, URL, Ref)
 	end.
+
+localpath(#dep{repo = [{Repo,_,_}|_], name = Name}) ->
+	Path = epm_utils:cache_path(<<Repo/binary, "/", Name/binary>>),
+	case filelib:is_dir(Path) of
+		true ->
+			{ok, Path};
+		false ->
+			{missing, Path}
+	end.
+
+consistent(#dep{repo = []} = Dep) ->
+	Dep#dep{consistency = incomplete};
+consistent(#dep{repo = [{_Repo,_,_}|_]} = Dep) ->
+	case localpath(Dep) of
+		{ok, _Path} ->
+			Dep#dep{consistency = unknown};
+		{missing, _Path} ->
+			Dep#dep{consistency = missing}
+	end.
+
