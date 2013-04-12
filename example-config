@@ -16,5 +16,5 @@ repositories <<
 %  validate built version -> #(dep) = #(version)
 %  Use a specific repo    -> #(dep) @ #(repo identifier)
 dependencies <-
-	lager  =1.2.1 @basho @github.basho
+	lager  =1.2.1 @basho @github.basho #1.2.1
 	tavern @github.lafka
