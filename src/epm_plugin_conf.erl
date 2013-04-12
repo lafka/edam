@@ -7,7 +7,8 @@
 -include("epm.hrl").
 
 parse(Path, Cfg) ->
-	CfgTokens = string:tokens(os:cmd(?epmpp(Path)), "\n"),
+	{ok, Out} = epm_utils:cmd(?epmpp(Path)),
+	CfgTokens = string:tokens(Out, "\n"),
 	{_, Cfg2} = lists:foldl(fun
 		(<<"repositories<<">>, {_, Acc}) ->
 			{repo, Acc};
