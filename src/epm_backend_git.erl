@@ -7,6 +7,7 @@
 	, clone/4
 	, update/4
 	, status/4
+	, status/5
 	]).
 
 name() ->
@@ -37,10 +38,14 @@ update(Path, Repo, URL, Ref) ->
 
 -spec status(any(), any(), any(), any()) -> ok | stale | unknown.
 status(Path, _Repo, URL, Ref) ->
+	status(Path, _Repo, URL, Ref, true).
+
+-spec status(any(), any(), any(), any(), boolean()) -> ok | stale | unknown.
+status(Path, _Repo, URL, Ref, CheckRem) ->
 	{ok, CWD} = file:get_cwd(),
 	Ret = case {maybe_update_remote(Path, URL), Ref} of
 		{ok, any}->
-			{ok, _} = epm_utils:cmd("git remote update"),
+			if CheckRem -> epm_utils:cmd("git remote update") end,
 			check_git_log("master");
 		{ok, Ref} -> check_git_log(Ref);
 		{updated, _} -> ok end,

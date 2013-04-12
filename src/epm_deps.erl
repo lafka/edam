@@ -5,6 +5,7 @@
 	, show/1
 	, show/2
 	, update/1
+	, has_update/1
 	, consistent/1
 	]).
 
@@ -58,14 +59,28 @@ update(#dep{repo = [], repos = Repos, name = Name}) ->
 	epm_utils:err("dependency '~s' has no canidates in ~p", [Name, Repos]);
 update(#dep{repo = [{Repo, Backend, URL}|_], name = Name, ref = Ref}) ->
 	epm_utils:info("picking '~s' from ~s @ ~s", [Name, Repo, URL]),
-	Path = epm_utils:cache_path(<<Repo/binary, "/", Name/binary>>),
+	Path = epm_utils:cache_path(<<"dist/", Repo/binary, "/", Name/binary>>),
 	case filelib:is_dir(Path) of
 		true ->
 			epm_utils:info("using local copy of ~s@~s from ~s~n", [Name, Repo, Path]),
-			Backend:update(Path, Repo, URL, Ref);
+			Backend:update(Path, Repo, URL, Ref, true);
 		false ->
 			epm_utils:debug("creating local copy of ~s @ ~s from ~s", [Name, Repo, URL]),
 			Backend:clone(Path, Repo, URL, Ref)
+	end.
+
+-spec has_update(#dep{}) -> true | false | missing.
+has_update(#dep{repo = [{Repo, Backend, URL}|_], name = Name, ref = Ref}) ->
+	epm_utils:debug("check ~s:~s status @ ~s", [Repo, Name, URL]),
+	Path = epm_utils:cache_path(<<"dist/", Repo/binary, "/", Name/binary>>),
+	case filelib:is_dir(Path) of
+		true ->
+			case Backend:status(Path, Repo, URL, Ref, false) of
+				ok -> false;
+				_ -> true
+			end;
+		false ->
+			missing
 	end.
 
 localpath(#dep{repo = [{Repo,_,_}|_], name = Name}) ->
