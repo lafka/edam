@@ -50,13 +50,14 @@ check_git_log(Path, Ref) ->
 	end.
 
 maybe_update_remote(Path, URL) ->
+	URL2 = binary_to_list(URL) ++ "\n",
 	case epm_utils:cmd("git remote -v | grep fetch | awk '{print $2}'", [], Path) of
-		{ok, <<URL, "\n">>} ->
+		{ok, URL2} ->
 			ok;
 		{ok, OldURL} ->
 			epm_utils:info("updating remote: ~p -> ~p", [OldURL, URL]),
-			{ok, _} = epm_utils:cmd("git remote set-url origin ~s ~s", [URL, OldURL]),
-			{ok, _} = epm_utils:cmd("git remote update"),
+			{ok, _} = epm_utils:cmd("git remote set-url origin ~s", [URL], Path),
+			{ok, _} = epm_utils:cmd("git remote update", [], Path),
 			updated
 	end.
 
