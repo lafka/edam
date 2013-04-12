@@ -1,12 +1,12 @@
 -module(epm_plugin_conf).
 
 -export([
-	  parse/3
+	  parse/2
 	]).
 
 -include("epm.hrl").
 
-parse(Path, Cfg, Pkg) ->
+parse(Path, Cfg) ->
 	CfgTokens = string:tokens(os:cmd(?epmpp(Path)), "\n"),
 	{_, Cfg2} = lists:foldl(fun
 		(<<"repositories<<">>, {_, Acc}) ->
@@ -29,10 +29,10 @@ parse(Path, Cfg, Pkg) ->
 		(<<" ", Arg/binary>>, {dep, Acc}) ->
 			epm_utils:debug("add dep: ~s", [Arg]),
 			Dep = #dep{} = parse_dep(Arg),
-			{dep, add_dep(Acc, Dep, Pkg)}
+			{dep, add_dep(Acc, Dep)}
 	end, {none, Cfg}, [list_to_binary(X) || X <- CfgTokens]),
 	Deps = lists:map(fun(#dep{} = Dep) ->
-		epm_deps:match_repos(Dep, Cfg)
+		epm_deps:match_repos(Dep, Cfg2)
 	end, Cfg2#cfg.deps),
 	Cfg2#cfg{deps = Deps}.
 
@@ -52,18 +52,10 @@ parse_dep(Arg) ->
 		end, {size(Name), #dep{name = Name}}, Opts),
 	Ret.
 
-add_dep(#cfg{deps = Deps, paths = Paths} = Cfg, Dep, #dep{name = <<"root">>}) ->
+add_dep(#cfg{deps = Deps, paths = Paths} = Cfg, Dep) ->
 	Cfg#cfg{
-		  paths = [[<<"_">>, Dep#dep.name]|Paths]
-		, deps = [Dep | Deps]};
-add_dep(#cfg{deps = Deps} = Cfg, Dep, #dep{name = Name, deps = SubDeps} = Pkg) ->
-	case lists:keyfind(#dep.name, Name, Deps) of
-		Pkg ->
-			Pkg2 = Pkg#dep{deps = [Dep|SubDeps]},
-			Cfg#cfg{deps = lists:keyreplace(Name, #dep.name, Deps, Pkg2)};
-		false ->
-			exit(dep_discrepancy, [Dep, Pkg])
-	end.
+		  paths = [[Dep#dep.name]|Paths]
+		, deps = [Dep | Deps]}.
 
 parse_repo(Repo) ->
 	{Alias, URL} = case binary:split(Repo, <<"<-">>) of

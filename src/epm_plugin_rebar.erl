@@ -1,8 +1,8 @@
 -module(epm_plugin_rebar).
 
 -export([
-	  parse/3
+	  parse/2
 	]).
 
-parse(Path, Cfg, Pkg) ->
+parse(_Path, _Cfg) ->
 	false.
