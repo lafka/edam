@@ -6,6 +6,7 @@
 	, fetch/2
 	, clone/4
 	, update/4
+	, status/4
 	]).
 
 name() ->
@@ -33,6 +34,27 @@ update(Path, Repo, URL, Ref) ->
 	maybe_update_remote(Path, URL),
 	{ok, _} = epm_utils:cmd("git checkout ~s", [Ref]),
 	file:set_cwd(CWD).
+
+-spec status(any(), any(), any(), any()) -> ok | stale | unknown.
+status(Path, _Repo, URL, Ref) ->
+	{ok, CWD} = file:get_cwd(),
+	Ret = case {maybe_update_remote(Path, URL), Ref} of
+		{ok, any}->
+			{ok, _} = epm_utils:cmd("git remote update"),
+			check_git_log("master");
+		{ok, Ref} -> check_git_log(Ref);
+		{updated, _} -> ok end,
+	file:set_cwd(CWD),
+	Ret.
+
+check_git_log(Ref) ->
+	Ref2 = binary_to_list(Ref),
+	{ok, _} = epm_utils:cmd("git remote update"),
+	case epm_utils:cmd("git log HEAD.." ++ Ref2 ++ " --oneline") of
+		{ok, []} -> ok;
+		{ok, _} -> stale;
+		{error, _} -> error
+	end.
 
 maybe_update_remote(Path, URL) ->
 	ok = file:set_cwd(Path),
