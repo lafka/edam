@@ -94,10 +94,15 @@ localpath(#dep{repo = [{Repo,_,_}|_], name = Name}) ->
 
 consistent(#dep{repo = []} = Dep) ->
 	Dep#dep{consistency = incomplete};
-consistent(#dep{repo = [{_Repo,_,_}|_]} = Dep) ->
+consistent(#dep{repo = [{Repo,Backend,URL}|_]} = Dep) ->
 	case localpath(Dep) of
-		{ok, _Path} ->
-			Dep#dep{consistency = unknown};
+		{ok, Path} ->
+			case Backend:status(Path, Repo, URL, Dep#dep.ref) of
+				ok ->
+					Dep#dep{consistency = consistent};
+				stale ->
+					Dep#dep{consistency = stale}
+			end;
 		{missing, _Path} ->
 			Dep#dep{consistency = missing}
 	end.
