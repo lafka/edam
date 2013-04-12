@@ -43,12 +43,14 @@ target(["build"], _Opts) ->
 target(["deps"], Opts) ->
     target(["deps", "fetch"], Opts);
 
-target(["deps", "fetch"], _Opts) ->
-    epm_utils:info("fetching deps"),
-    Cfg = epm:config(),
+target(["deps", "fetch"], Opts) ->
+    target(["deps", "fetch", "."], Opts);
+
+target(["deps", "fetch", Path], _Opts) ->
+    Cfg = epm_config:parse(Path),
     lists:foreach(fun(#dep{} = Dep) ->
         Dep2 = epm_deps:match_repos(Dep, Cfg),
-        epm_deps:update(Dep2, Cfg)
+        epm_deps:update(Dep2)
        end, Cfg#cfg.deps),
     ok;
 
@@ -56,7 +58,6 @@ target(["deps", "check"], Opts) ->
     target(["deps", "check", "."], Opts);
 
 target(["deps", "check", Path], _Opts) ->
-    epm_utils:info("checking deps"),
     Cfg = epm_config:parse(Path),
     lists:foreach(
         fun(#dep{repo = []} = Dep) ->
@@ -67,12 +68,10 @@ target(["deps", "check", Path], _Opts) ->
                 true ->
                     io:format("= ~s:~s -> has remote updates~n"
                         , [Repo, Dep2#dep.name]);
-                false ->
-                    io:format("= ~s:~s -> has remote updates~n"
-                        , [Repo, Dep2#dep.name]);
                 missing ->
                     io:format("= ~s:~s -> not checked out~n"
-                        , [Repo, Dep2#dep.name]),
+                        , [Repo, Dep2#dep.name]);
+                false ->
                     ok
             end
        end, Cfg#cfg.deps),
