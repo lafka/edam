@@ -2,6 +2,7 @@
 
 -export([
 	  parse/1
+	, print/1
 	, deps/1
 	, repos/1
 	]).
@@ -37,6 +38,21 @@ parse(Path) ->
 		epm_deps:match_repos(Dep, Cfg)
 	end, Cfg#cfg.deps),
 	Cfg#cfg{deps = Deps}.
+
+print(#cfg{repos = Repos, deps = Deps}) ->
+	io:format(
+		"Config:~n"
+		"=======~n~n"
+		"Repositories:~n"
+		"~s~n"
+		"Dependencies:~n"
+		"~s",
+		[render_repos(Repos), [ epm_deps:show(Dep, []) || Dep <- Deps]]).
+
+render_repos(Repos) ->
+	lists:map(fun({Alias, _Backend, URL, Pkgs}) ->
+		io_lib:format("= ~s (~s); ~B packages~n", [Alias, URL, length(Pkgs)])
+	end, Repos).
 
 parse_dep(Arg) ->
 	[Name|Opts] = binary:split(Arg, [<<$:>>, <<$@>>, <<$=>>], [global]),

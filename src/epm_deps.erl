@@ -3,6 +3,7 @@
 -export([
 	  match_repos/2
 	, show/1
+	, show/2
 	, update/1
 	]).
 
@@ -31,16 +32,20 @@ match_repos2(#dep{name = Name} = Dep, Repos) ->
 				Acc
 		end end, Dep, Repos).
 
-show(#dep{name = Name, repo = Repo, repos = Repos, version = Vsn
-	, ref = Ref}) ->
-	epm_utils:debug(
-		"dependency: ~s~n"
-		"========================~n"
-		" - version: ~s~n"
-		" - ref: ~s~n"
-		" - repo: ~p~n"
-		" - repos: ~p~n"
-		, [Name, Vsn, Ref, Repo, Repos]).
+show(#dep{} = Dep) ->
+	show(Dep, [version, ref, repo, repos]).
+
+show(#dep{} = Dep, []) ->
+	io_lib:format("= ~s @~p~n", [Dep#dep.name, [X || {X,_,_} <- Dep#dep.repo]]);
+show(#dep{} = Dep, Inc) ->
+	io_lib:format("= ~s @~p~n", [Dep#dep.name, [X || {X,_,_} <- Dep#dep.repo]])
+	++ "========================\n" ++
+	[ io_lib:format("=> ~s: ~p~n", [Attr, val(Dep, Attr)]) ||  Attr <- Inc].
+
+val(#dep{version = Val}, version) -> Val;
+val(#dep{ref = Val}, ref) -> Val;
+val(#dep{repo = Val}, repo) -> Val;
+val(#dep{repos = Val}, repos) -> Val.
 
 %% Works by checking out a "base" directory, this keep tracks of your
 %% remote and should always be in sync. When that is in place a clone
