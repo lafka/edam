@@ -45,7 +45,8 @@ show(#dep{} = Dep, Inc) ->
 val(#dep{version = Val}, version) -> Val;
 val(#dep{ref = Val}, ref) -> Val;
 val(#dep{repo = Val}, repo) -> Val;
-val(#dep{repos = Val}, repos) -> Val.
+val(#dep{repos = Val}, repos) -> Val;
+val(#dep{deps = Val}, deps) -> Val.
 
 %% Works by checking out a "base" directory, this keep tracks of your
 %% remote and should always be in sync. When that is in place a clone
