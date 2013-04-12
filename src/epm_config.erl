@@ -1,15 +1,15 @@
 -module(epm_config).
 
 -export([
-	  parse/0
+	  parse/1
 	, deps/1
 	, repos/1
 	]).
 
 -include("epm.hrl").
 
-parse() ->
-	CfgTokens = string:tokens(os:cmd(?epmpp), "\n"),
+parse(Path) ->
+	CfgTokens = string:tokens(os:cmd(?epmpp(Path)), "\n"),
 	{_, Cfg} = lists:foldl(fun
 		(<<"repositories<<">>, {_, Acc}) ->
 			{repo, Acc};

@@ -11,6 +11,6 @@
 	, deps = [] :: [#dep{}]
 	}).
 
--define(epmpp, "bin/epmpp").
+-define(epmpp(Path), "bin/epmpp " ++ Path).
 
 -define(backends, [epm_backend_github, epm_backend_git, epm_backend_file]).

@@ -1,10 +1,11 @@
 #/bin/bash
 
-conffile=epm.config
+basedir=${1:-"."}
+conffile=${basedir}/epm.config
 tmpfile=.cfg-parser
 
 if [ ! -r "${conffile}" ]; then
-	echo 'error: ${conffile} not found.'
+	echo "error: ${conffile} not found."
 	exit 1
 fi
 
