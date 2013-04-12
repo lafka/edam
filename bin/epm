@@ -11,9 +11,12 @@ main([]) ->
     usage();
 main(Args) ->
     try
-        lists:foreach(
-              fun(Target) -> target(Target) end
-            , [ X || [Y|_] = X <- Args, Y =/= $-])
+        add_codepath(escript:script_name()),
+        {Cmd, Opts} = lists:partition(fun(
+              [$-|_]) -> false; (_) -> true end
+            , Args),
+        epm_utils:debug("args: ~p", [Cmd]),
+        target(Cmd, Opts)
     catch C:R ->
         epm_utils:err("aaaah fuuuuuck something broke :(~n~n"
             "error: ~p~n"
@@ -21,17 +24,75 @@ main(Args) ->
             "trace: ~p~n", [C, R, erlang:get_stacktrace()])
     end.
 
-usage() ->
-    io:format("usage: epm {build|deps}~n").
+add_codepath([$/|_] = File) ->
+    add_codepath(filename:dirname(filename:dirname(File)));
+add_codepath(File) ->
+    {ok, Base} = file:get_cwd(),
+    add_codepath2(
+        filename:dirname(filename:dirname(filename:join(Base, File)))).
 
-target("build") ->
+add_codepath2(Dir) ->
+    true = code:add_path(filename:join([Dir, "ebin"])).
+
+usage() ->
+    io:format("usage: epm {build|deps|sign}~n").
+
+target(["build"], _Opts) ->
     epm_utils:info("building~n");
 
-target("deps") ->
+target(["deps"], Opts) ->
+    target(["deps", "fetch"], Opts);
+
+target(["deps", "fetch"], _Opts) ->
     epm_utils:info("fetching deps"),
     Cfg = epm:config(),
-    lists:foreach(fun(#dep{name = Name} = Dep) ->
-        Dep2 = epm_deps:match_repos(Dep, Cfg2),
-        epm_deps:update(Dep2, Cfg2)
-       end, Cfg2#cfg.deps),
-    ok.
+    lists:foreach(fun(#dep{} = Dep) ->
+        Dep2 = epm_deps:match_repos(Dep, Cfg),
+        epm_deps:update(Dep2, Cfg)
+       end, Cfg#cfg.deps),
+    ok;
+
+target(["deps", "check"], Opts) ->
+    target(["deps", "check", "."], Opts);
+
+target(["deps", "check", Path], _Opts) ->
+    epm_utils:info("checking deps"),
+    Cfg = epm_config:parse(Path),
+    lists:foreach(
+        fun(#dep{repo = []} = Dep) ->
+            io:format("= ~s -> missing repository~n", [Dep#dep.name]);
+        (#dep{repo = [{Repo,_,_}|_]} = Dep) ->
+            Dep2 = epm_deps:match_repos(Dep, Cfg),
+            case epm_deps:has_update(Dep2) of
+                true ->
+                    io:format("= ~s:~s -> has remote updates~n"
+                        , [Repo, Dep2#dep.name]);
+                false ->
+                    io:format("= ~s:~s -> has remote updates~n"
+                        , [Repo, Dep2#dep.name]);
+                missing ->
+                    io:format("= ~s:~s -> not checked out~n"
+                        , [Repo, Dep2#dep.name]),
+                    ok
+            end
+       end, Cfg#cfg.deps),
+    ok;
+
+target(["sign"], _Opts) ->
+    epm_utils:err("sign: not implemented");
+
+target(["key", "import"], _Opts) ->
+    epm_utils:err("key import: not implemented");
+
+target(["key", "revoke"], _Opts) ->
+    epm_utils:err("key revoke: not implemented");
+
+target(["key", "generate"], _Opts) ->
+    epm_utils:err("key generate: not implemented");
+
+target(["key", "list"], _Opts) ->
+    epm_utils:err("key generate: not implemented");
+
+target(Args, _Opts) ->
+    io:format("unknown command ~p~n", [Args]),
+    usage().
