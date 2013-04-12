@@ -21,3 +21,20 @@ Features:
 
 Will probably add Support for dependency snapshots, which would lock
 dependencies at commit time (only git support?).
+
+
+## Usage
+
+__Print out the current known configuration:__
+
+```erlang
+epm_config:print(epm_config:parse(".")).
+```
+
+__Fetch/Update all depenencies:__
+
+```erlang
+%% Fetches a local copy to .cache/<publisher>/<dep> and then makes a
+%% local clone to lib/<dep>-<vsn>.
+[epm_deps:update(Dep) || Dep <- epm_config:deps(epm_config:parse("."))].
+```
