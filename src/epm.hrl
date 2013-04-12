@@ -16,3 +16,5 @@
 -define(epmpp(Path), "bin/epmpp " ++ Path).
 
 -define(backends, [epm_backend_github, epm_backend_git, epm_backend_file]).
+
+-define(plugins, [epm_plugin_conf, epm_plugin_rebar]).
