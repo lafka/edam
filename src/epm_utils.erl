@@ -17,6 +17,7 @@
 -export([
 	  cmd/1
 	, cmd/2
+	, cmd/3
 	]).
 
 -export([
@@ -70,6 +71,21 @@ cmd(Cmd) ->
 -spec cmd(iolist(), [term()]) -> {ok, Out} | {error, {non_neg_integer(), Out}}
 	when Out :: string().
 cmd(Cmd, Args) ->
+	{ok, Cwd} = file:get_cwd(),
+	cmd(Cmd, Args, Cwd).
+
+-spec cmd(iolist(), [term()], string()) -> {ok, Out} | {error, {non_neg_integer(), Out}}.
+cmd(Cmd, Args, Path) ->
+	Closure = case file:get_cwd() of
+		{ok, Path} ->
+			fun() -> ok end;
+		{ok, OldCwd} ->
+			debug("set cwd: ~s", [Path]),
+			ok = file:set_cwd(Path),
+			fun() ->
+				debug("reset cwd: ~s", [OldCwd]),
+				ok = file:set_cwd(OldCwd)
+			end end,
 	File = mktemp("epm-eval"),
 	Cmd2 = io_lib:format(Cmd, Args),
 	Cmd3 = io_lib:format("~s > ~s 2>&1; echo $?", [Cmd2, File]),
@@ -77,8 +93,9 @@ cmd(Cmd, Args) ->
 	{Status, "\n"} = string:to_integer(os:cmd(Cmd3)),
 	{ok, Output0} = file:read_file(File),
 	Output = binary_to_list(Output0),
+	Closure(),
 	case Status of
-		0 -> {ok, Output0};
+		0 -> {ok, Output};
 		N -> {error, {N, Output}}
 	end.
 

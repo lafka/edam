@@ -8,7 +8,7 @@
 
 parse(Path, Cfg) ->
 	{ok, Out} = epm_utils:cmd(?epmpp(Path)),
-	CfgTokens = string:tokens(binary_to_list(Out), "\n"),
+	CfgTokens = string:tokens(Out, "\n"),
 	{_, Cfg2} = lists:foldl(fun
 		(<<"repositories<<">>, {_, Acc}) ->
 			{repo, Acc};

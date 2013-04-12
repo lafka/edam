@@ -24,17 +24,11 @@ clone(Path, Repo, URL, Ref) ->
 	update(Path, Repo, URL, Ref).
 
 update(Path, Repo, URL, any) ->
-	{ok, CWD} = file:get_cwd(),
-	epm_utils:debug("set cwd: ~s -> ~s", [CWD, Path]),
 	maybe_update_remote(Path, URL),
-	{ok, _} = epm_utils:cmd("git pull"),
-	file:set_cwd(CWD);
+	{ok, _} = epm_utils:cmd("git pull origin master", [], Path);
 update(Path, Repo, URL, Ref) ->
-	{ok, CWD} = file:get_cwd(),
-	epm_utils:debug("set cwd: ~s -> ~s", [CWD, Path]),
 	maybe_update_remote(Path, URL),
-	{ok, _} = epm_utils:cmd("git checkout ~s", [Ref]),
-	file:set_cwd(CWD).
+	{ok, _} = epm_utils:cmd("git checkout ~s", [Ref], Path).
 
 -spec status(any(), any(), any(), any()) -> ok | stale | unknown.
 status(Path, _Repo, URL, Ref) ->
@@ -42,33 +36,25 @@ status(Path, _Repo, URL, Ref) ->
 
 -spec status(any(), any(), any(), any(), boolean()) -> ok | stale | unknown.
 status(Path, _Repo, URL, Ref, CheckRem) ->
-	{ok, CWD} = file:get_cwd(),
 	Ret = case {maybe_update_remote(Path, URL), Ref} of
-		{ok, any}->
-			if CheckRem -> epm_utils:cmd("git remote update") end,
-			check_git_log("master");
-		{ok, Ref} -> check_git_log(Ref);
+		{ok, any} -> check_git_log(Path, "master");
+		{ok, Ref} -> check_git_log(Path, Ref);
 		{updated, _} -> ok end,
-	file:set_cwd(CWD),
 	Ret.
 
-check_git_log(Ref) ->
-	Ref2 = binary_to_list(Ref),
-	{ok, _} = epm_utils:cmd("git remote update"),
-	case epm_utils:cmd("git log HEAD.." ++ Ref2 ++ " --oneline") of
+check_git_log(Path, Ref) ->
+	case epm_utils:cmd("git log HEAD..~s --oneline", [Ref], Path) of
 		{ok, []} -> ok;
 		{ok, _} -> stale;
 		{error, _} -> error
 	end.
 
 maybe_update_remote(Path, URL) ->
-	ok = file:set_cwd(Path),
-	URL2 = binary_to_list(URL) ++ "\n",
-	case epm_utils:cmd("git remote -v | grep fetch | awk '{print $2}'") of
-		{ok, URL2}->
+	case epm_utils:cmd("git remote -v | grep fetch | awk '{print $2}'", [], Path) of
+		{ok, <<URL, "\n">>} ->
 			ok;
 		{ok, OldURL} ->
-			epm_utils:info("updating remote: ~p -> ~p", [OldURL, URL2]),
+			epm_utils:info("updating remote: ~p -> ~p", [OldURL, URL]),
 			{ok, _} = epm_utils:cmd("git remote set-url origin ~s ~s", [URL, OldURL]),
 			{ok, _} = epm_utils:cmd("git remote update"),
 			updated
