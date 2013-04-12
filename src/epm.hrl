@@ -4,11 +4,13 @@
 	, repos = [] :: [binary()] %% Repos allowed to search in
 	, version = any :: string() | any
 	, ref = any :: string() | any
+	, deps = [] :: [#dep{}]
 	}).
 
 -record(cfg, {
 	  repos = [] :: [{binary(), binary()}]
 	, deps = [] :: [#dep{}]
+	, paths = [] :: tuple(binary())
 	}).
 
 -define(epmpp(Path), "bin/epmpp " ++ Path).

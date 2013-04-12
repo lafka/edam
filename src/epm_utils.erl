@@ -24,6 +24,10 @@
 	  get_domain/1
 	]).
 
+-export([
+	  binjoin/2
+	]).
+
 -define(format(Type, Msg, Args),
 	{_, {H, M, S}} = erlang:universaltime(),
 	io:format("[~s] ~b:~b:~b -> " ++ Msg ++ "~n", [Type, H, M, S] ++ Args)).
@@ -85,3 +89,11 @@ get_domain(Resource) ->
 		[P1] -> P1 end,
 	[Domain|_] = binary:split(URL, <<$/>>),
 	Domain.
+
+binjoin(BinList, Sep) when is_list(BinList), is_binary(Sep) ->
+	lists:foldr(
+		  fun(A,<<>>) -> <<A/binary>>;
+		     (A,B)    -> <<A/binary, Sep/binary, B/binary>> end
+		, <<>>
+		, BinList).
+
