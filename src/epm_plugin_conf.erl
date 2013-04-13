@@ -6,9 +6,16 @@
 
 -include("epm.hrl").
 
-parse(Path, Cfg) ->
-	{ok, Out} = epm_utils:cmd(?epmpp(Path)),
-	CfgTokens = string:tokens(Out, "\n"),
+parse(Path, Pkg) ->
+	case epm_utils:cmd(?epmpp(Path)) of
+		{ok, Out} ->
+			CfgTokens = string:tokens(Out, "\n"),
+			parse2(Path, Pkg, CfgTokens);
+		{error, _} ->
+			false
+	end.
+
+parse2(_Path, Pkg, Tokens) ->
 	{_, Cfg2} = lists:foldl(fun
 		(<<"repositories<<">>, {_, Acc}) ->
 			{repo, Acc};
@@ -30,8 +37,8 @@ parse(Path, Cfg) ->
 		(<<" ", Arg/binary>>, {dep, Acc}) ->
 			epm_utils:debug("add dep: ~s", [Arg]),
 			Dep = #dep{} = parse_dep(Arg),
-			{dep, add_dep(Acc, Dep)}
-	end, {none, Cfg}, [list_to_binary(X) || X <- CfgTokens]),
+			{dep, add_dep(Acc, Dep, Pkg)}
+	end, {none, #cfg{}}, [list_to_binary(X) || X <- Tokens]),
 	Deps = lists:map(fun(#dep{} = Dep) ->
 		epm_deps:match_repos(Dep, Cfg2)
 	end, Cfg2#cfg.deps),
@@ -53,7 +60,7 @@ parse_dep(Arg) ->
 		end, {size(Name), #dep{name = Name}}, Opts),
 		Ret.
 
-add_dep(#cfg{deps = Deps, paths = Paths} = Cfg, Dep) ->
+add_dep(#cfg{deps = Deps, paths = Paths} = Cfg, Dep, Pkg) ->
 	Cfg#cfg{
 		  paths = [[Dep#dep.name]|Paths]
 		, deps = [Dep | Deps]}.

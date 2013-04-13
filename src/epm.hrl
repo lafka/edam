@@ -16,7 +16,7 @@
 -record(cfg, {
 	  repos = [] :: [{binary(), binary()}]
 	, deps = [] :: [#dep{}]
-	, paths = [] :: tuple(binary())
+	, paths = [] :: [[binary()]]
 	}).
 
 -define(epmpp(Path), "bin/epmpp " ++ Path).

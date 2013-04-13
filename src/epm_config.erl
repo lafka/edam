@@ -8,10 +8,15 @@
 	, print/1
 	]).
 
+-export([dep_lens/1]).
+
 -include("epm.hrl").
 
+-define(root, <<"_root">>).
+
 parse(Path) ->
-	parse(Path, #dep{name = <<"root">>}).
+	Res = parse(Path, #dep{name = ?root}),
+	Res#cfg{paths = [[?root | X] || X <- Res#cfg.paths]}.
 
 %% Parse configuration(s) for a directory, this can be merged with
 %% a parent configuration to build a configuration hierarchy.
@@ -20,26 +25,38 @@ parse(Path) ->
 %% To make sure we have a consistent tree the top initial caller must
 %% fetch the dependencies and then re-parse all the configs.
 parse(Path, Pkg) ->
-	lists:foldl(fun(Plugin, Acc) ->
+	Res = lists:foldl(fun(Plugin, Acc) ->
 		epm_utils:debug("parse ~s: ~s", [Path, Plugin]),
 		case Plugin:parse(Path, Acc) of
 			#cfg{} = Cfg ->
-				Cfg2 = merge(Pkg, Cfg, Acc),
-				Cfg2#cfg{deps = [epm_deps:proc(X) || X <- Cfg#cfg.deps]};
+				Cfg2 = Cfg#cfg{
+					deps = [epm_deps:proc(X) || X <- Cfg#cfg.deps]},
+				merge(Cfg2, Acc);
 			false ->
 				Acc
 		end
-	end, #cfg{}, ?plugins).
+	end, #cfg{}, ?plugins),
+	lists:foldl(fun(#dep{} = Dep, Acc) ->
+		DepPath = epm_deps:codepath(Dep),
+		DepCfg = parse(DepPath, Dep),
+		pmerge(Dep, DepCfg, Acc)
+	end, Res, Res#cfg.deps).
 
-merge(#dep{name = Name, deps = PkgDeps} = Pkg, A, B) ->
-	Paths = [ [Pkg#dep.name|X] || X <- A#cfg.paths],
-	Pkg2 = Pkg#dep{deps = lists:umerge(A#cfg.deps, PkgDeps)},
-	CfgDeps = case Name of
-		<<"root">> -> A#cfg.deps;
-		Name -> lists:keyreplace(Name, #dep.name, B#cfg.deps, Pkg2) end,
-	#cfg{ repos = lists:ukeymerge(1, A#cfg.repos, B#cfg.repos)
-	    , deps = CfgDeps
-	    , paths = lists:umerge(Paths, B#cfg.paths)}.
+%% pmerge: merge a child configuration
+pmerge(#dep{name = Name} = Pkg, A, B) ->
+	Paths = [ [Name | X] || X <- A#cfg.paths],
+	Deps = lists:keyreplace(Name, #dep.name, B#cfg.deps
+		, Pkg#dep{deps = A#cfg.deps}),
+	B#cfg{repos = lists:ukeymerge(1, A#cfg.repos, B#cfg.repos)
+		, paths = lists:umerge(Paths, B#cfg.paths)
+		, deps = Deps}.
+
+%% merge:  merge configurations from the same directory (multiple plugins)
+%% @todo lafka 2013-04-13; fix merge when multiple plugins share some dependencies
+merge(A, B) ->
+	B#cfg{repos = lists:ukeymerge(1, A#cfg.repos, B#cfg.repos)
+		, deps  = lists:umerge(B#cfg.deps, A#cfg.deps)
+	    , paths = lists:umerge(A#cfg.paths, B#cfg.paths)}.
 
 deps(Cfg) ->
 	Cfg#cfg.deps.
@@ -54,9 +71,8 @@ print(#cfg{repos = Repos} = Cfg) ->
 		"Repositories:~n"
 		"~s~n"
 		"Dependencies:~n"
-		"~s~n"
-		"~s",
-		[render_repos(Repos), render_deps(Cfg), render_msgs(Cfg)]).
+		"~s~n",
+		[render_repos(Repos), render_deps(Cfg)]).
 
 render_repos(Repos) ->
 	lists:map(fun({Alias, _Backend, URL, Pkgs}) ->
@@ -64,46 +80,48 @@ render_repos(Repos) ->
 	end, Repos).
 
 render_deps(Cfg) ->
-	lists:map(fun([<<"root">>|Path]) ->
+	lists:map(fun([?root | Path]) ->
 		Pkg = (dep_lens(Path))(Cfg),
-		Repo = [X || {X,_,_} <- Pkg#dep.repo],
-		io_lib:format("= ~s:~s ~p~n"
-			, [epm_utils:binjoin(Path, <<$.>>), Pkg#dep.version, Repo])
+		[_|Head] = lists:reverse(Path),
+		Parents = case epm_utils:binjoin(Head, <<" -> ">>) of
+			<<>> -> <<>>;
+			X -> io_lib:format("(~s)", [X]) end,
+		io_lib:format("= ~s:~s ~s ~s; ~s~n"
+			, [lists:last(Path)
+				, Pkg#dep.version
+				, Parents
+				, format_repos(Pkg)
+				, format_alert(Pkg)])
 	end, Cfg#cfg.paths).
 
-render_msgs(Cfg) ->
-	Alerts = lists:foldl(fun([<<"root">>|Path], Acc) ->
-		Pkg = (dep_lens(Path))(Cfg),
-		case Pkg#dep.consistency of
-			consistent -> Acc;
-			_ -> [Pkg|Acc] end
-	end, [], Cfg#cfg.paths),
-	case Alerts of
-		[] ->
-			"";
-		Alerts ->
-			io_lib:format(
-				"Alerts:~n"
-				"~s",
-				[[format_alert(X) || X <- Alerts]])
-	end.
+format_repos(#dep{repo = []}) ->
+	<<>>;
+format_repos(#dep{repo = Repos}) ->
+	Repo = [X || {X,_,_} <- Repos],
+	io_lib:format("~p", [Repo]).
 
-format_alert(#dep{consistency = incomplete, name = Y}) ->
-	io_lib:format("= ~s: no suitable publishers found~n", [Y]);
-format_alert(#dep{consistency = missing, name = Y} = Dep) ->
+format_alert(#dep{consistency = incomplete}) ->
+	io_lib:format("no suitable publishers found", []);
+format_alert(#dep{consistency = missing} = Dep) ->
 	#dep{repos = [{R,_,U}|_]} = Dep,
-	io_lib:format("= ~s: requires remote fetch from ~s:~s~n", [Y,R,U]);
-format_alert(#dep{consistency = unknown, name = Y, version = Vsn}) ->
-	io_lib:format("= ~s: missing build target (vsn: ~s)~n", [Y, Vsn]);
-format_alert(#dep{consistency = stale, name = Y}) ->
-	io_lib:format("= ~s: dependency has remote updates~n", [Y]).
+	io_lib:format("requires remote fetch from ~s:~s", [R,U]);
+format_alert(#dep{consistency = unknown, version = Vsn}) ->
+	io_lib:format("missing build target (vsn: ~s)", [Vsn]);
+format_alert(#dep{consistency = stale}) ->
+	io_lib:format("dependency has remote updates", []);
+format_alert(_) ->
+	"".
 
 
 dep_lens(Path) ->
-	lists:foldr(fun comp_lens/2, fun comp_cfg_lens/1, Path).
+	lists:foldr(fun comp_lens/2
+		, fun(X) -> X end
+		, [ access_dep(X) || X <- Path]).
 
-comp_cfg_lens(#cfg{deps = D}) -> D;
-comp_cfg_lens(#dep{deps = D}) -> D.
+%access_deps(#dep{deps = D}) -> D.
+access_dep(Name) -> 
+	fun(#dep{deps = D}) -> lists:keyfind(Name, #dep.name, D);
+	   (#cfg{deps = D}) -> lists:keyfind(Name, #dep.name, D) end.
 
-comp_lens(Name, PA) ->
-	fun(R) -> lists:keyfind(Name, #dep.name, PA(R)) end.
+comp_lens(Comp, Acc) ->
+	fun(R) -> Acc(Comp(R)) end.

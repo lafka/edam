@@ -86,7 +86,7 @@ cmd(Cmd, Args, Path) ->
 	File = mktemp("epm-eval"),
 	Cmd2 = io_lib:format(Cmd, Args),
 	Cmd3 = io_lib:format("~s > ~s 2>&1; echo $?", [Cmd2, File]),
-	debug("+ ~s", [Cmd3]),
+	debug("+ ~s $ ~s", [Path, Cmd3]),
 	{Status, "\n"} = string:to_integer(os:cmd(Cmd3)),
 	{ok, Output0} = file:read_file(File),
 	Output = binary_to_list(Output0),
