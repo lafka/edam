@@ -8,15 +8,22 @@
 -include("../src/epm.hrl").
 
 main([]) ->
-    usage();
+    target(["help"], []);
 main(Args) ->
     try
-        add_codepath(escript:script_name()),
+        Dir = get_codepath(escript:script_name()),
+        true = code:add_path(filename:join([Dir, "ebin"])),
         {Cmd, Opts} = lists:partition(fun(
               [$-|_]) -> false; (_) -> true end
             , Args),
-        epm_utils:debug("args: ~p", [Cmd]),
-        target(Cmd, Opts)
+        epm:init([{basedir, Dir}]),
+        case parse_args(Opts, ok) of
+            ok ->
+                epm_utils:debug("args: ~p", [Cmd]),
+                target(Cmd, Opts);
+            error ->
+                ok
+        end
     catch C:R ->
         epm_utils:err("aaaah fuuuuuck something broke :(~n~n"
             "error: ~p~n"
@@ -24,21 +31,32 @@ main(Args) ->
             "trace: ~p~n", [C, R, erlang:get_stacktrace()])
     end.
 
-add_codepath([$/|_] = File) ->
-    add_codepath(filename:dirname(filename:dirname(File)));
-add_codepath(File) ->
-    {ok, Base} = file:get_cwd(),
-    add_codepath2(
-        filename:dirname(filename:dirname(filename:join(Base, File)))).
+parse_args([], Acc) -> Acc;
+parse_args(_, error) -> error;
+parse_args(["-v", Verbosity | T], _) ->
+    epm:set(verbosity, Verbosity),
+    parse_args(T, ok);
+parse_args(["-d" | T], _) ->
+    epm:set(dryrun, true),
+    parse_args(T, ok);
+parse_args([Arg | T], _) ->
+    io:format("parse: unknown argument '~s'~n", [Arg]),
+    parse_args(T, error).
 
-add_codepath2(Dir) ->
-    true = code:add_path(filename:join([Dir, "ebin"])).
+get_codepath([$/|_] = File) ->
+    filename:dirname(filename:dirname(File));
+get_codepath(File) ->
+    {ok, Base} = file:get_cwd(),
+    filename:dirname(filename:dirname(filename:join(Base, File))).
 
 usage() ->
     io:format("usage: epm {build|deps|key}~n").
 
 target(["help" | _], _Opts) ->
     io:format("epm {build|deps|sign|key}~n"
+        "~n"
+        "  Commands:~n"
+        "==========================================================~n"
         "~n"
         "= build~n"
         "  Build something, you should use make/rebar/sinan/erlc/emake.~n"
@@ -51,7 +69,13 @@ target(["help" | _], _Opts) ->
         "~n"
         "= sign~n"
         "  Sign your source code for releases.~n"
-        "~n");
+        "~n"
+        " OPTIONS:~n"
+        "==========================================================~n"
+        "~n"
+        " -v <lvl>       Level of output to display~n"
+        " -d, --dry-run  Dry run, don't actually do anything~n"
+        );
 
 target(["build"], _Opts) ->
     epm_utils:info("building~n");
@@ -137,6 +161,7 @@ target(["deps", "print"], Opts) ->
     target(["deps", "print", "."], Opts);
 
 target(["deps", "print", Path], _Opts) ->
+    epm:set(autofetch, false),
     Cfg = epm_config:parse(Path),
     epm_config:print(Cfg);
 
