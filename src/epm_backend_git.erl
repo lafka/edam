@@ -34,7 +34,7 @@ clone(Path, Repo, URL, Ref) ->
 update(Path, Repo, URL, any) ->
 	maybe_update_remote(Path, URL),
 	{ok, _} = epm_utils:cmd("git pull origin master", [], Path);
-update(Path, Repo, URL, Ref) ->
+update(Path, _Repo, URL, Ref) ->
 	maybe_update_remote(Path, URL),
 	{ok, _} = epm_utils:cmd("git checkout ~s", [Ref], Path).
 
@@ -43,14 +43,23 @@ status(Path, _Repo, URL, Ref) ->
 	status(Path, _Repo, URL, Ref, true).
 
 -spec status(any(), any(), any(), any(), boolean()) -> ok | stale | unknown | error.
-status(Path, _Repo, URL, Ref, CheckRem) ->
+status(Path, Repo, URL, Ref, CheckRem) ->
+	RemoteChanged = case has_updated_remote(Path, URL) of
+		{true, _} -> true;
+		false -> false end,
 	case filelib:is_dir(Path) of
-		true ->
+		true when CheckRem ->
 			Ret = case {maybe_update_remote(Path, URL), Ref} of
 				{ok, any} -> check_git_log(Path, "master");
 				{ok, Ref} -> check_git_log(Path, Ref);
 				{updated, _} -> ok end,
 			Ret;
+		_ when RemoteChanged ->
+			epm_utils:info("remote: ~s needs remote change (~s)"
+				, [Repo, URL]),
+			check_git_log(Path, "master");
+		true ->
+			check_git_log(Path, "master");
 		false ->
 			unknown
 	end.
@@ -62,12 +71,20 @@ check_git_log(Path, Ref) ->
 		{error, _} -> error
 	end.
 
-maybe_update_remote(Path, URL) ->
+has_updated_remote(Path, URL) ->
 	URL2 = binary_to_list(URL) ++ "\n",
 	case epm_utils:cmd("git remote -v | grep fetch | awk '{print $2}'", [], Path) of
-		{ok, URL2} ->
+		{ok, URL2} -> false;
+		{ok, Old} ->
+			epm_utils:info("remote changed: ~s -> ~s", [Old, URL2]),
+			{true, Old}
+	end.
+
+maybe_update_remote(Path, URL) ->
+	case has_updated_remote(Path, URL) of
+		false ->
 			ok;
-		{ok, OldURL} ->
+		{true, OldURL} ->
 			epm_utils:info("updating remote: ~p -> ~p", [OldURL, URL]),
 			{ok, _} = epm_utils:cmd("git remote set-url origin ~s", [URL], Path),
 			{ok, _} = epm_utils:cmd("git remote update", [], Path),
