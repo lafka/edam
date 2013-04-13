@@ -54,6 +54,13 @@ target(["deps", "fetch", Path], _Opts) ->
        end, Cfg#cfg.deps),
     ok;
 
+target(["deps", "print"], Opts) ->
+    target(["deps", "print", "."], Opts);
+
+target(["deps", "print", Path], _Opts) ->
+    Cfg = epm_config:parse(Path),
+    epm_config:print(Cfg);
+
 target(["deps", "check"], Opts) ->
     target(["deps", "check", "."], Opts);
 
