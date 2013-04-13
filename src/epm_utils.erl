@@ -24,6 +24,7 @@
 	  save_cache/2
 	, load_cache/1
 	, cache_path/1
+	, lib_path/1
 	, mktemp/0
 	, mktemp/1
 	, mktemp/2
@@ -44,6 +45,7 @@
 	io:format("[~s] ~b:~b:~b -> " ++ Msg ++ "~n", [Type, H, M, S] ++ Args)).
 
 -define(cache(File), binary_to_list(<<".cache/", File/binary>>)).
+-define(lib(Lib), binary_to_list(<<"lib/", Lib/binary>>)).
 
 info(Msg) ->
 	info(Msg, []).
@@ -131,6 +133,9 @@ load_cache(Resource) ->
 
 cache_path(Resource) ->
 	?cache(Resource).
+
+lib_path(Resource) ->
+	?lib(Resource).
 
 get_domain(Resource) ->
 	URL = case binary:split(Resource, <<"://">>) of

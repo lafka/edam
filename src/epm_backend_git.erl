@@ -19,9 +19,17 @@ match(_) ->
 fetch(_, _) -> false.
 
 clone(Path, Repo, URL, Ref) ->
-	filelib:ensure_dir(Path),
-	{ok, _} = epm_utils:cmd("git clone ~s ~s", [URL, Path]),
-	update(Path, Repo, URL, Ref).
+			filelib:ensure_dir(Path),
+	case binary:match(URL, [<<$@>>, <<"://">>]) of
+		nomatch ->
+			filelib:ensure_dir(Path),
+			URL2 = filename:absname(URL),
+			{ok, _} = epm_utils:cmd("git clone -l ~s ~s", [URL2, Path]),
+			update(Path, Repo, URL2, Ref);
+		_ ->
+			{ok, _} = epm_utils:cmd("git clone ~s ~s", [URL, Path]),
+			update(Path, Repo, URL, Ref)
+	end.
 
 update(Path, Repo, URL, any) ->
 	maybe_update_remote(Path, URL),
@@ -34,13 +42,18 @@ update(Path, Repo, URL, Ref) ->
 status(Path, _Repo, URL, Ref) ->
 	status(Path, _Repo, URL, Ref, true).
 
--spec status(any(), any(), any(), any(), boolean()) -> ok | stale | unknown.
+-spec status(any(), any(), any(), any(), boolean()) -> ok | stale | unknown | error.
 status(Path, _Repo, URL, Ref, CheckRem) ->
-	Ret = case {maybe_update_remote(Path, URL), Ref} of
-		{ok, any} -> check_git_log(Path, "master");
-		{ok, Ref} -> check_git_log(Path, Ref);
-		{updated, _} -> ok end,
-	Ret.
+	case filelib:is_dir(Path) of
+		true ->
+			Ret = case {maybe_update_remote(Path, URL), Ref} of
+				{ok, any} -> check_git_log(Path, "master");
+				{ok, Ref} -> check_git_log(Path, Ref);
+				{updated, _} -> ok end,
+			Ret;
+		false ->
+			unknown
+	end.
 
 check_git_log(Path, Ref) ->
 	case epm_utils:cmd("git log HEAD..~s --oneline", [Ref], Path) of

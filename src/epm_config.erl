@@ -25,7 +25,7 @@ parse(Path, Pkg) ->
 		case Plugin:parse(Path, Acc) of
 			#cfg{} = Cfg ->
 				Cfg2 = merge(Pkg, Cfg, Acc),
-				Cfg2#cfg{deps = [epm_deps:consistent(X) || X <- Cfg#cfg.deps]};
+				Cfg2#cfg{deps = [epm_deps:proc(X) || X <- Cfg#cfg.deps]};
 			false ->
 				Acc
 		end

@@ -6,7 +6,7 @@
 	, show/2
 	, update/1
 	, has_update/1
-	, consistent/1
+	, proc/1
 	]).
 
 -include("epm.hrl").
@@ -57,53 +57,126 @@ val(#dep{deps = Val}, deps) -> Val.
 %% of a library in addition to a "central" cache for your project.
 update(#dep{repo = [], repos = Repos, name = Name}) ->
 	epm_utils:err("dependency '~s' has no canidates in ~p", [Name, Repos]);
-update(#dep{repo = [{Repo, Backend, URL}|_], name = Name, ref = Ref}) ->
+update(#dep{repo = [{Repo,_,URL}|_], name = Name} = Dep) ->
 	epm_utils:info("picking '~s' from ~s @ ~s", [Name, Repo, URL]),
-	Path = epm_utils:cache_path(<<"dist/", Repo/binary, "/", Name/binary>>),
+	update_repo(Dep, true),
+	update_repo(Dep, false).
+
+update_repo(#dep{name = Name, repo = [{Repo,_,_}|_]} = Dep, Master) ->
+	Path = case Master of
+		true ->
+			epm_utils:cache_path(<<"dist/", Repo/binary, "/", Name/binary>>);
+		false when Dep#dep.version =:= any ->
+			filename:join(["lib", <<Name/binary>>]);
+		false ->
+			Vsn = Dep#dep.version,
+			filename:join(["lib", <<Name/binary, $-, Vsn/binary>>])
+	end,
+	do_update_repo(Path, Dep).
+
+do_update_repo(Path, #dep{repo = [{Repo, Backend, URL}|_]} = Dep) ->
 	case filelib:is_dir(Path) of
 		true ->
-			epm_utils:info("using local copy of ~s@~s from ~s~n", [Name, Repo, Path]),
-			Backend:update(Path, Repo, URL, Ref);
+			epm_utils:info("using local copy of ~s@~s from ~s~n"
+				, [Dep#dep.name, Repo, Path]),
+			Backend:update(Path, Repo, URL, Dep#dep.ref);
 		false ->
-			epm_utils:debug("creating local copy of ~s @ ~s from ~s", [Name, Repo, URL]),
-			Backend:clone(Path, Repo, URL, Ref)
+			epm_utils:debug("creating local copy of ~s @ ~s from ~s"
+				, [Dep#dep.name, Repo, URL]),
+			Backend:clone(Path, Repo, URL, Dep#dep.ref)
 	end.
 
--spec has_update(#dep{}) -> true | false | missing.
-has_update(#dep{repo = [{Repo, Backend, URL}|_], name = Name, ref = Ref}) ->
-	epm_utils:debug("check ~s:~s status @ ~s", [Repo, Name, URL]),
-	Path = epm_utils:cache_path(<<"dist/", Repo/binary, "/", Name/binary>>),
-	case filelib:is_dir(Path) of
-		true ->
-			case Backend:status(Path, Repo, URL, Ref, false) of
-				ok -> false;
-				_ -> true
+-spec has_update(#dep{}) -> {Ret, Ret} when Ret :: true | false | missing | unknown.
+has_update(#dep{repo = [{Repo, Backend, URL}|_], name = Name, ref = Ref} = Dep) ->
+	Cachepath = cachepath(Dep),
+	Codepath  = codepath(Dep),
+	case {filelib:is_dir(Cachepath), filelib:is_dir(Codepath)} of
+		{true, true} ->
+			CacheUpdate = check_path_status(Cachepath, Backend, Repo, URL, Ref),
+			LocalUpdate = check_path_status(Codepath, Backend, Repo, URL, Ref),
+			case {CacheUpdate, LocalUpdate} of
+				{ok, ok} -> false;
+				{stale, _} -> true;
+				{_, stale} -> true;
+				{unknown,_} -> missing;
+				{_,unknown} -> unknown
 			end;
-		false ->
+		{true, false} ->
+			check_path_status(Cachepath, Backend, Repo, URL, Ref);
+		{false, false} ->
 			missing
 	end.
 
-localpath(#dep{repo = [{Repo,_,_}|_], name = Name}) ->
-	Path = epm_utils:cache_path(<<Repo/binary, "/", Name/binary>>),
+check_path_status(Codepath, Backend, Repo, URL, Ref) ->
+	Backend:status(Codepath, Repo, URL, Ref, false).
+
+cachepath(#dep{} = Dep) ->
+	cachepath(Dep, false).
+
+cachepath(#dep{repo = [{Repo,_,_}|_], name = Name}, false) ->
+	epm_utils:cache_path(<<"dist/", Repo/binary, "/", Name/binary>>);
+cachepath(#dep{repo = [{Repo,_,_}|_], name = Name}, true) ->
+	path_exists(epm_utils:cache_path(<<"dist/", Repo/binary, "/", Name/binary>>)).
+
+codepath(#dep{} = Dep) ->
+	codepath(Dep, false).
+
+codepath(#dep{version = any, name = Name}, true) ->
+	path_exists(epm_utils:lib_path(<<Name/binary>>));
+codepath(#dep{version = Vsn, name = Name}, true) ->
+	path_exists(epm_utils:lib_path(<<Name/binary, $-, Vsn/binary>>));
+codepath(#dep{version = any, name = Name}, false) ->
+	epm_utils:lib_path(<<Name/binary>>);
+codepath(#dep{version = Vsn, name = Name}, false) ->
+	epm_utils:lib_path(<<Name/binary, $-, Vsn/binary>>).
+
+path_exists(Path) ->
 	case filelib:is_dir(Path) of
 		true ->
 			{ok, Path};
 		false ->
-			{missing, Path}
+			{error, {missing, Path}}
 	end.
 
-consistent(#dep{repo = []} = Dep) ->
+proc(#dep{repo = []} = Dep) ->
 	Dep#dep{consistency = incomplete};
-consistent(#dep{repo = [{Repo,Backend,URL}|_]} = Dep) ->
-	case localpath(Dep) of
+proc(#dep{repo = [{Repo,Backend,_}|_]} = Dep) ->
+	case cachepath(Dep, true) of
 		{ok, Path} ->
-			case Backend:status(Path, Repo, URL, Dep#dep.ref) of
-				ok ->
-					Dep#dep{consistency = consistent};
-				stale ->
-					Dep#dep{consistency = stale}
+			case proc_consistency(Path, Dep) of
+				incomplete ->
+					Dep#dep{consistency = incomplete};
+				unknown ->
+					Dep#dep{consistency = unknown};
+				State ->
+					Dep#dep{consistency = State}
 			end;
-		{missing, _Path} ->
+		{error, {missing, Path}} ->
+			epm_utils:debug("missing dep: ~s:~s -> ~s"
+				, [Repo, Dep#dep.name, Path]),
 			Dep#dep{consistency = missing}
 	end.
 
+proc_consistency(Path, #dep{repo = [{Repo,Backend,_}|_]} = Dep) ->
+	Codepath = codepath(Dep),
+	case proc_consistency2(Codepath, Dep, unknown) of
+		#dep{consistency = unknown} ->
+			epm_utils:info("checking out local copy of ~s:~s=~s"
+				, [Repo, Dep#dep.name, Dep#dep.version]),
+			Path2 = list_to_binary(Path),
+			%% @todo 2013-04-13; lafka - Make fetch recursive flag
+			{ok,_} = Backend:clone(Codepath, Repo, Path2, Dep#dep.ref),
+			ok;
+		Dep2 ->
+			epm_utils:info("found local copy of ~s:~s=~s"
+				, [Repo, Dep#dep.name, Dep#dep.version]),
+			Dep2#dep.consistency
+	end.
+
+proc_consistency2(Path, #dep{repo = [{Repo,Backend,URL}|_]} = Dep, Fb) ->
+	case Backend:status(Path, Repo, URL, Dep#dep.ref, false) of
+		ok -> Dep#dep{consistency = consistent};
+		stale -> Dep#dep{consistency = stale};
+		unknown -> Dep#dep{consistency = unknown};
+		error -> Dep#dep{consistency = Fb}
+	end.

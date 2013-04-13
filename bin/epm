@@ -71,6 +71,9 @@ target(["deps", "check", Path], _Opts) ->
                 missing ->
                     io:format("= ~s:~s -> not checked out~n"
                         , [Repo, Dep2#dep.name]);
+                unknown ->
+                    io:format("= ~s:~s=~s -> missing local copy~n"
+                        , [Repo, Dep2#dep.name, Dep2#dep.version]);
                 false ->
                     ok
             end
