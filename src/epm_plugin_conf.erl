@@ -40,7 +40,7 @@ parse2(_Path, Pkg, Tokens) ->
 			{dep, add_dep(Acc, Dep, Pkg)}
 	end, {none, #cfg{}}, [list_to_binary(X) || X <- Tokens]),
 	Deps = lists:map(fun(#dep{} = Dep) ->
-		epm_deps:match_repos(Dep, Cfg2)
+		epm_dep:match_repos(Dep, Cfg2)
 	end, Cfg2#cfg.deps),
 	Cfg2#cfg{deps = Deps}.
 

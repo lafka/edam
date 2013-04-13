@@ -1,4 +1,4 @@
--module(epm_deps).
+-module(epm_dep).
 
 -export([
 	  match_repos/2

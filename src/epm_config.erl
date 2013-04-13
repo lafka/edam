@@ -30,14 +30,14 @@ parse(Path, Pkg) ->
 		case Plugin:parse(Path, Acc) of
 			#cfg{} = Cfg ->
 				Cfg2 = Cfg#cfg{
-					deps = [epm_deps:proc(X) || X <- Cfg#cfg.deps]},
+					deps = [epm_dep:proc(X) || X <- Cfg#cfg.deps]},
 				merge(Cfg2, Acc);
 			false ->
 				Acc
 		end
 	end, #cfg{}, ?plugins),
 	lists:foldl(fun(#dep{} = Dep, Acc) ->
-		DepPath = epm_deps:codepath(Dep),
+		DepPath = epm_dep:codepath(Dep),
 		DepCfg = parse(DepPath, Dep),
 		pmerge(Dep, DepCfg, Acc)
 	end, Res, Res#cfg.deps).
