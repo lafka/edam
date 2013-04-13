@@ -9,6 +9,13 @@
 	, proc/1
 	]).
 
+-export([
+	  codepath/1
+	, codepath/2
+	, cachepath/1
+	, cachepath/2
+	]).
+
 -include("epm.hrl").
 
 match_repos(#dep{} = Dep, #cfg{repos = Repos}) ->
