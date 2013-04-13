@@ -35,31 +35,77 @@ add_codepath2(Dir) ->
     true = code:add_path(filename:join([Dir, "ebin"])).
 
 usage() ->
-    io:format("usage: epm {build|deps|sign}~n").
+    io:format("usage: epm {build|deps|key}~n").
+
+target(["help" | _], _Opts) ->
+    io:format("epm {build|deps|sign|key}~n"
+        "~n"
+        "= build~n"
+        "  Build something, you should use make/rebar/sinan/erlc/emake.~n"
+        "~n"
+        "= deps {search|fetch|update|check|print|help}~n"
+        "  Find, check, manage and display dependencies.~n"
+        "~n"
+        "= key {import|revoke|generate|list|help}~n"
+        "  Key management for remote repositories and signing.~n"
+        "~n"
+        "= sign~n"
+        "  Sign your source code for releases.~n"
+        "~n");
 
 target(["build"], _Opts) ->
     epm_utils:info("building~n");
 
 target(["deps"], Opts) ->
-    target(["deps", "fetch"], Opts);
+    target(["deps", "sync"], Opts);
 
-target(["deps", "fetch"], Opts) ->
-    target(["deps", "fetch", "."], Opts);
+target(["deps", "help" | _], _Opts) ->
+    io:format("epm deps {search|fetch|update|check|print|help}~n"
+        "~n"
+        "= search <package>~n"
+        "  Search all repositories for a package package.~n"
+        "~n"
+        "= fetch [<package>,..]~n"
+        "  Fetch one or more packages to local store for later use.~n"
+        "~n"
+        "= sync [package]~n"
+        "  Update all repositories, optionaly only update [package]~n"
+        "  if specified.~n"
+        "~n"
+        "= check [package]~n"
+        "  Check if repositores are up to date, fetches the remote~n"
+        "  status of all packages. Optionally specify [package] to~n"
+        "  only check single dependency.~n"
+        "~n"
+        "= print [package]~n"
+        "  Print out the current status for all your dependencies.~n"
+        "  If package is given the configuration for that package~n"
+        "  will be used."
+        "~n"
+       );
 
-target(["deps", "fetch", Path], _Opts) ->
+target(["deps", "search"], _Opts) ->
+    io:format("deps search: you must specify search phrase~n");
+
+target(["deps", "search", _Phrase], _Opts) ->
+    epm_utils:err("deps search: not implemented");
+
+target(["deps", "fetch"], _Opts) ->
+    io:format("deps fetch: you must specify a package~n");
+
+target(["deps", "fetch", _Deps], _Opts) ->
+    epm_utils:err("deps fetch: not implemented");
+
+target(["deps", "sync"], Opts) ->
+    target(["deps", "sync", "."], Opts);
+
+target(["deps", "sync", Path], _Opts) ->
     Cfg = epm_config:parse(Path),
     lists:foreach(fun(#dep{} = Dep) ->
         Dep2 = epm_deps:match_repos(Dep, Cfg),
         epm_deps:update(Dep2)
        end, Cfg#cfg.deps),
     ok;
-
-target(["deps", "print"], Opts) ->
-    target(["deps", "print", "."], Opts);
-
-target(["deps", "print", Path], _Opts) ->
-    Cfg = epm_config:parse(Path),
-    epm_config:print(Cfg);
 
 target(["deps", "check"], Opts) ->
     target(["deps", "check", "."], Opts);
@@ -87,8 +133,34 @@ target(["deps", "check", Path], _Opts) ->
        end, Cfg#cfg.deps),
     ok;
 
+target(["deps", "print"], Opts) ->
+    target(["deps", "print", "."], Opts);
+
+target(["deps", "print", Path], _Opts) ->
+    Cfg = epm_config:parse(Path),
+    epm_config:print(Cfg);
+
 target(["sign"], _Opts) ->
     epm_utils:err("sign: not implemented");
+
+target(["key"], Opts) ->
+    target(["key", "help"], Opts);
+
+target(["key", "help"|_], _Opts) ->
+    io:format("epm key {import|revoke|generate|list|help}~n"
+        "~n"
+        "= import~n"
+        "  Add a key to your keychain.~n"
+        "~n"
+        "= revoke~n"
+        "  Remove a trusted key from your keychain.~n"
+        "~n"
+        "= generate~n"
+        "  Generate a new key used for signing.~n"
+        "~n"
+        "= list~n"
+        "  List all trusted keys.~n"
+        "~n");
 
 target(["key", "import"], _Opts) ->
     epm_utils:err("key import: not implemented");
