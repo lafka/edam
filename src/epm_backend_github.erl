@@ -29,12 +29,12 @@ name() ->
 match(<<"git@github.com:", _/binary>>) -> true;
 match(<<"ssh://git@github.com:", _/binary>>) -> true;
 match(<<"git://github.com/", _/binary>>) -> true;
-match(<<"https://github.com:", _/binary>>) -> true;
+match(<<"https://github.com/", _/binary>>) -> true;
 match(_) -> false.
 
 fetch(Alias, Resource) ->
 	case [X || X <- binary:split(Resource, [<<$/>>, <<$:>>], [global]), <<>> =/= X] of
-		[_, <<"github.com">>, User] ->
+		[_, <<"github.com">>, User|_] ->
 			Alias2 = fetch_alias(Alias, User),
 			case epm_utils:load_cache(?cache(Alias2)) of
 				{ok, Terms} ->
