@@ -152,43 +152,41 @@ path_exists(Path) ->
 
 proc(#dep{repo = []} = Dep) ->
 	Dep#dep{consistency = incomplete};
-proc(#dep{repo = [{Repo,_,_}|_]} = Dep) ->
-	epm_utils:debug("dep: proc ~s:~s", [Dep#dep.name, Repo]),
+proc(#dep{repo = [{Repo,Backend,URL}|_]} = Dep) ->
+	Autofetch =  epm:get(autofetch) and not epm:get(dryrun),
 	case cachepath(Dep, true) of
 		{ok, Path} ->
-			State = proc_consistency(Path, Dep),
-			Dep#dep{consistency = State};
-		{error, {missing, Path}} ->
-			epm_utils:debug("missing dep: ~s:~s -> ~s"
-				, [Repo, Dep#dep.name, Path]),
+			proc_consistency(Path, Dep);
+		{error, {missing, Cachepath}} when Autofetch->
+			epm_utils:info("dep: ~s:~s, checking out master copy @~s"
+				, [Repo, Dep#dep.name, URL]),
+			{ok,_} = Backend:clone(Cachepath, Repo, URL, "master"),
+			proc(Dep);
+		{error, {missing, Cachepath}} ->
+			epm_utils:debug("dep: ~s:~s -> missing master copy ~s"
+				, [Repo, Dep#dep.name, Cachepath]),
 			Dep#dep{consistency = missing}
 	end.
 
 proc_consistency(Path, #dep{repo = [{Repo,Backend,_}|_]} = Dep) ->
-	Codepath = codepath(Dep),
-	case proc_consistency2(Codepath, Dep, missing) of
-		#dep{consistency = unknown} ->
+	Autofetch =  epm:get(autofetch) and not epm:get(dryrun),
+	case codepath(Dep, true) of
+		{ok, Codepath} ->
+			proc_consistency2(Codepath, Dep);
+		{error, {missing, Codepath}} when Autofetch ->
 			epm_utils:info("checking out local copy of ~s:~s=~s"
 				, [Repo, Dep#dep.name, Dep#dep.version]),
 			Path2 = list_to_binary(Path),
-			%% @todo 2013-04-13; lafka - Make fetch recursive flag
-			case epm:get(autofetch) and not epm:get(dryrun) of
-				true ->
-					{ok,_} = Backend:clone(Codepath, Repo, Path2, Dep#dep.ref);
-				false ->
-					epm_utils:info("cannot determine dependencies for ~s"
-						", requires fetch of ~s", [Codepath, Repo])
-			end,
-			ok;
-		Dep2 ->
-			epm_utils:info("found local copy of ~s:~s=~s"
-				, [Repo, Dep#dep.name, Dep#dep.version]),
-			Dep2#dep.consistency
+			{ok,_} = Backend:clone(Codepath, Repo, Path2, Dep#dep.ref),
+			proc_consistency2(Codepath, Dep);
+		{error, {missing, Codepath}} ->
+			epm_utils:info("cannot determine dependencies for ~s"
+				", requires fetch of ~s", [Codepath, Repo]),
+			Dep#dep{consistency = unknown}
 	end.
 
-proc_consistency2(Path, #dep{repo = [{Repo,Backend,URL}|_]} = Dep, Fb) ->
+proc_consistency2(Path, #dep{repo = [{Repo,Backend,URL}|_]} = Dep) ->
 	case Backend:status(Path, Repo, URL, Dep#dep.ref, false) of
 		ok -> Dep#dep{consistency = consistent};
-		error -> Dep#dep{consistency = Fb};
 		State -> Dep#dep{consistency = State}
 	end.
