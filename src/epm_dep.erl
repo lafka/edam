@@ -34,8 +34,9 @@ match_repos(Name, #cfg{deps = Deps, repos = Repos}) ->
 
 match_repos2(#dep{name = Name} = Dep, Repos) ->
 	lists:foldl(fun({RepoName,Backend,_URL,Repo}, Acc) ->
+		Match = lists:member(RepoName, Acc#dep.repos),
 		case lists:keyfind(Name, 1, Repo) of
-			{Name, URL} ->
+			{Name, URL} when Match ->
 				Acc#dep{repo = [{RepoName, Backend, URL}|Acc#dep.repo]};
 			_ ->
 				Acc
@@ -84,8 +85,6 @@ update_repo(#dep{name = Name, repo = [{Repo,_,_}|_]} = Dep, Master) ->
 do_update_repo(Path, #dep{repo = [{Repo, Backend, URL}|_]} = Dep) ->
 	case filelib:is_dir(Path) of
 		true ->
-			epm_utils:info("using local copy of ~s@~s from ~s"
-				, [Dep#dep.name, Repo, Path]),
 			Backend:update(Path, Repo, URL, Dep#dep.ref);
 		false ->
 			epm_utils:debug("creating local copy of ~s @ ~s from ~s"
