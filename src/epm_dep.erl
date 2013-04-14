@@ -84,7 +84,7 @@ update_repo(#dep{name = Name, repo = [{Repo,_,_}|_]} = Dep, Master) ->
 do_update_repo(Path, #dep{repo = [{Repo, Backend, URL}|_]} = Dep) ->
 	case filelib:is_dir(Path) of
 		true ->
-			epm_utils:info("using local copy of ~s@~s from ~s~n"
+			epm_utils:info("using local copy of ~s@~s from ~s"
 				, [Dep#dep.name, Repo, Path]),
 			Backend:update(Path, Repo, URL, Dep#dep.ref);
 		false ->
