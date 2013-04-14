@@ -96,15 +96,15 @@ render_deps(Cfg) ->
 
 format_repos(#dep{repo = []}) ->
 	<<>>;
-format_repos(#dep{repo = Repos}) ->
+format_repos(#dep{repo = Repos} = Dep) ->
 	Repo = [X || {X,_,_} <- Repos],
 	io_lib:format("~p", [Repo]).
 
 format_alert(#dep{consistency = incomplete}) ->
 	io_lib:format("no suitable publishers found", []);
 format_alert(#dep{consistency = missing} = Dep) ->
-	#dep{repos = [{R,_,U}|_]} = Dep,
-	io_lib:format("requires remote fetch from ~s:~s", [R,U]);
+	#dep{repo = [{R,_,U}|_]} = Dep,
+	io_lib:format("requires remote fetch: remote -> ~s", [U]);
 format_alert(#dep{consistency = unknown, version = Vsn}) ->
 	io_lib:format("missing build target (vsn: ~s)", [Vsn]);
 format_alert(#dep{consistency = stale}) ->

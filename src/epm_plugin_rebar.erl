@@ -26,8 +26,12 @@ parse2(_Path, Pkg, Terms) ->
 				case [X || {_, true} = X <- Backends] of
 					[{Backend, true}|_] ->
 						{Alias, Pkgs} = Backend:fetch(undefined, URL),
-						add_dep(Acc#cfg{repos = [{Alias, Backend, URL, Pkgs}|R]}
-							, parse_dep({Name, Version, Src})
+						Cfg = Acc#cfg{repos = [{Alias, Backend, URL, Pkgs}|R]},
+						Dep = parse_dep({Name, Version, Src}, Alias),
+						epm_utils:debug("add dep: ~s", [Dep#dep.name]),
+						epm_utils:debug("add repo: ~s", [Alias]),
+						add_dep(Cfg
+							, epm_dep:match_repos(Dep, Cfg)
 							, Pkg);
 					[] ->
 						Acc
@@ -37,9 +41,9 @@ parse2(_Path, Pkg, Terms) ->
 			false
 	end.
 
-parse_dep({Name, ".*", Src}) ->
-	parse_dep({Name, any, Src});
-parse_dep({Name, Vsn, Src}) ->
+parse_dep({Name, ".*", Src}, Repo) ->
+	parse_dep({Name, any, Src}, Repo);
+parse_dep({Name, Vsn, Src}, Repo) ->
 	Ref = case Src of
 		{git, _, {branch, Branch}} -> Branch;
 		{git, _, {tag, Tag}} -> Tag;
@@ -47,7 +51,8 @@ parse_dep({Name, Vsn, Src}) ->
 		_ -> any end,
 	#dep{name = atom_to_binary(Name, unicode)
 		, version = Vsn
-		, ref = Ref}.
+		, ref = Ref
+		, repos = [Repo]}.
 
 add_dep(#cfg{deps = Deps, paths = Paths} = Cfg, Dep, Pkg) ->
 	Cfg#cfg{

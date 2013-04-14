@@ -146,17 +146,12 @@ path_exists(Path) ->
 
 proc(#dep{repo = []} = Dep) ->
 	Dep#dep{consistency = incomplete};
-proc(#dep{repo = [{Repo,Backend,_}|_]} = Dep) ->
+proc(#dep{repo = [{Repo,_,_}|_]} = Dep) ->
+	epm_utils:debug("dep: proc ~s:~s", [Dep#dep.name, Repo]),
 	case cachepath(Dep, true) of
 		{ok, Path} ->
-			case proc_consistency(Path, Dep) of
-				incomplete ->
-					Dep#dep{consistency = incomplete};
-				unknown ->
-					Dep#dep{consistency = unknown};
-				State ->
-					Dep#dep{consistency = State}
-			end;
+			State = proc_consistency(Path, Dep),
+			Dep#dep{consistency = State};
 		{error, {missing, Path}} ->
 			epm_utils:debug("missing dep: ~s:~s -> ~s"
 				, [Repo, Dep#dep.name, Path]),
@@ -165,7 +160,7 @@ proc(#dep{repo = [{Repo,Backend,_}|_]} = Dep) ->
 
 proc_consistency(Path, #dep{repo = [{Repo,Backend,_}|_]} = Dep) ->
 	Codepath = codepath(Dep),
-	case proc_consistency2(Codepath, Dep, unknown) of
+	case proc_consistency2(Codepath, Dep, missing) of
 		#dep{consistency = unknown} ->
 			epm_utils:info("checking out local copy of ~s:~s=~s"
 				, [Repo, Dep#dep.name, Dep#dep.version]),
@@ -188,7 +183,6 @@ proc_consistency(Path, #dep{repo = [{Repo,Backend,_}|_]} = Dep) ->
 proc_consistency2(Path, #dep{repo = [{Repo,Backend,URL}|_]} = Dep, Fb) ->
 	case Backend:status(Path, Repo, URL, Dep#dep.ref, false) of
 		ok -> Dep#dep{consistency = consistent};
-		stale -> Dep#dep{consistency = stale};
-		unknown -> Dep#dep{consistency = unknown};
-		error -> Dep#dep{consistency = Fb}
+		error -> Dep#dep{consistency = Fb};
+		State -> Dep#dep{consistency = State}
 	end.

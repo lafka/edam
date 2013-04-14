@@ -61,7 +61,7 @@ status(Path, Repo, URL, Ref, CheckRem) ->
 		true ->
 			check_git_log(Path, "master");
 		false ->
-			unknown
+			missing
 	end.
 
 check_git_log(Path, Ref) ->
