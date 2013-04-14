@@ -5,44 +5,46 @@
 
 -define(lib(Name, Vsn), "lib/" ++ Name ++ $- ++ Vsn).
 
--include("../src/epm.hrl").
-
 main([]) ->
     target(["help"], []);
 main(Args) ->
     try
         Dir = get_codepath(escript:script_name()),
         true = code:add_path(filename:join([Dir, "ebin"])),
+        epm:init([{basedir, Dir}]),
         {Cmd, Opts} = lists:partition(fun(
               [$-|_]) -> false; (_) -> true end
             , Args),
-        epm:init([{basedir, Dir}]),
-        case parse_args(Opts, ok) of
-            ok ->
-                epm_utils:debug("args: ~p", [Cmd]),
-                target(Cmd, Opts);
+        case parse_args(Opts, []) of
+            {ok, Opts2} ->
+                epm:log(debug, "args: ~p, global: ~p, inner: ~p", [Cmd, Opts, Opts2]),
+                target(Cmd, Opts2);
             error ->
                 ok
         end
-    catch C:R ->
-        epm_utils:err("aaaah fuuuuuck something broke :(~n~n"
-            "error: ~p~n"
-            "reason: ~p~n"
-            "trace: ~p~n", [C, R, erlang:get_stacktrace()])
+    catch Class:Reason ->
+        io:format("~nCaught exception: ~p:~n~69..=s~n~s", [{Class, Reason}, "="
+            , eunit_lib:format_exception({Class,Reason,erlang:get_stacktrace()})])
     end.
 
-parse_args([], Acc) -> Acc;
+parse_args([], Acc) -> {ok, Acc};
 parse_args(_, error) -> error;
-parse_args([[$-, $v, $= | Verbosity]| T], _) ->
-    Val = [list_to_atom(X) || X <- string:tokens(Verbosity, ",")],
-    epm:set(verbosity, Val),
-    parse_args(T, ok);
-parse_args([[$-, $d] | T], _) ->
-    epm:set(dryrun, true),
-    parse_args(T, ok);
-parse_args([Arg | T], _) ->
-    io:format("parse: unknown argument '~s': ~p~n", [Arg, T]),
-    parse_args(T, error).
+parse_args(["-v=" ++ Verbosity | T], Acc) ->
+    Val = list_to_atom(Verbosity),
+    epm:set_env(log_level, Val),
+    parse_args(T, Acc);
+parse_args(["-d" | T], Acc) ->
+    epm:set_env(dryrun, true),
+    epm:log(info, "epm: using dry-run, nothing will be done"),
+    parse_args(T, Acc);
+parse_args(["--rebar" | T], Acc) ->
+    epm:set_env(rebar_compatability, true),
+    epm:set_env(append_versions, false),
+    epm:set_env(libdir, "deps"),
+    epm:log(info, "epm: setting rebar compatability"),
+    parse_args(T, Acc);
+parse_args([Arg | T], Acc) ->
+    parse_args(T, [Arg | Acc]).
 
 get_codepath([$/|_] = File) ->
     filename:dirname(filename:dirname(File));
@@ -51,9 +53,6 @@ get_codepath(File) ->
     filename:dirname(filename:dirname(filename:join(Base, File))).
 
 usage() ->
-    io:format("usage: epm {build|deps|key}~n").
-
-target(["help" | _], _Opts) ->
     io:format("epm {build|deps|sign|key}~n"
         "~n"
         "  Commands:~n"
@@ -76,10 +75,13 @@ target(["help" | _], _Opts) ->
         "~n"
         " -v <lvl>       Level of output to display~n"
         " -d, --dry-run  Dry run, don't actually do anything~n"
-        );
+        ).
+
+target(["help" | _], _Opts) ->
+    usage();
 
 target(["build"], _Opts) ->
-    epm_utils:info("building~n");
+    epm:log(info, "building~n");
 
 target(["deps"], Opts) ->
     target(["deps", "sync"], Opts);
@@ -88,19 +90,18 @@ target(["deps", "help" | _], _Opts) ->
     io:format("epm deps {search|fetch|update|check|print|help}~n"
         "~n"
         "= search <package>~n"
-        "  Search all repositories for a package package.~n"
+        "  Search all repositories for package.~n"
         "~n"
         "= fetch [<package>,..]~n"
         "  Fetch one or more packages to local store for later use.~n"
+        "  This operation will not update your source dependencies.~n"
         "~n"
         "= sync [package]~n"
         "  Update all repositories, optionaly only update [package]~n"
         "  if specified.~n"
         "~n"
         "= check [package]~n"
-        "  Check if repositores are up to date, fetches the remote~n"
-        "  status of all packages. Optionally specify [package] to~n"
-        "  only check single dependency.~n"
+        "  Performs a non-destructiv check of dependencies.~n"
         "~n"
         "= print [package]~n"
         "  Print out the current status for all your dependencies.~n"
@@ -113,61 +114,82 @@ target(["deps", "search"], _Opts) ->
     io:format("deps search: you must specify search phrase~n");
 
 target(["deps", "search", _Phrase], _Opts) ->
-    epm_utils:err("deps search: not implemented");
+    epm:log(error, "deps search: not implemented");
 
-target(["deps", "fetch"], _Opts) ->
-    io:format("deps fetch: you must specify a package~n");
+target(["deps", "fetch"], Opts) ->
+    target(["deps", "fetch", "."], Opts);
 
-target(["deps", "fetch", _Deps], _Opts) ->
-    epm_utils:err("deps fetch: not implemented");
+target(["deps", "fetch", Path], _Opts) ->
+    {ok, Cfg} = epm:parse(Path),
+    epm_pkg:foreach(fun(Pkg) ->
+        epm_pkg:fetch(Pkg, epm:set(opt, {ignore_codepath, true}, Cfg))
+    end, Cfg);
 
 target(["deps", "sync"], Opts) ->
     target(["deps", "sync", "."], Opts);
 
-target(["deps", "sync", Path], _Opts) ->
-    Cfg = epm_config:parse(Path),
-    lists:foreach(fun(#dep{} = Dep) ->
-        Dep2 = epm_dep:match_repos(Dep, Cfg),
-        epm_dep:update(Dep2)
-       end, Cfg#cfg.deps),
-    ok;
+target(["deps", "sync", Path], _Opts0) ->
+    {ok, Cfg} = epm:parse(Path),
+    epm:log(debug, "syncing ~b packages", [length(epm:get(deps, Cfg))]),
+    Fetch = fun(Pkg, Fun) ->
+        epm_pkg:foreach(fun(Dep) ->
+            case epm_pkg:sync(Dep, Cfg) of
+                ok -> ok;
+                {error, Err} ->
+                    epm:log(error, "sync: ~s:~s=~s, ~p"
+                        , epm_pkg:get([catalog, name, version], Pkg)
+                            ++ Err)
+            end,
+            Fun(Dep, Fun) end,
+        Pkg)
+    end,
+    epm_pkg:foreach(fun(Pkg) -> Fetch(Pkg, Fetch) end, Cfg);
 
 target(["deps", "check"], Opts) ->
     target(["deps", "check", "."], Opts);
 
-target(["deps", "check", Path], _Opts) ->
-    Cfg = epm_config:parse(Path),
-    lists:foreach(
-        fun(#dep{repo = []} = Dep) ->
-            io:format("= ~s -> missing repository~n", [Dep#dep.name]);
-        (#dep{repo = [{Repo,_,_}|_]} = Dep) ->
-            Dep2 = epm_dep:match_repos(Dep, Cfg),
-            case epm_dep:has_update(Dep2) of
-                true ->
-                    io:format("= ~s:~s -> has remote updates~n"
-                        , [Repo, Dep2#dep.name]);
-                missing ->
-                    io:format("= ~s:~s -> not checked out~n"
-                        , [Repo, Dep2#dep.name]);
-                unknown ->
-                    io:format("= ~s:~s=~s -> missing local copy~n"
-                        , [Repo, Dep2#dep.name, Dep2#dep.version]);
-                false ->
-                    ok
-            end
-       end, Cfg#cfg.deps),
-    ok;
+target(["deps", "check", Path], _Opts0) ->
+    epm:set_env(autofetch, false), %% @todo 2013-04-19 move into cfg
+    {ok, Cfg} = epm:parse(Path),
+    epm_pkg:foreach(fun(Pkg) ->
+        epm_pkg:fetch(Pkg, Cfg)
+    end, Cfg);
 
 target(["deps", "print"], Opts) ->
     target(["deps", "print", "."], Opts);
 
 target(["deps", "print", Path], _Opts) ->
-    epm:set(autofetch, false),
-    Cfg = epm_config:parse(Path),
-    epm_config:print(Cfg);
+    epm:set_env(autofetch, false),
+    {ok, Cfg} = epm:parse(Path),
+    io:format("Catalogs (~b):~n", [length(epm:get(catalogs, Cfg))]),
+    epm_catalog:foreach(fun(Ct) ->
+        [CtMod, Pkgs] = epm_catalog:get([module, pkgs], Ct),
+        Args = epm_catalog:get([name, resource], Ct)
+             ++ [CtMod:name(), length(Pkgs)],
+        io:format("= ~s.~s (~s: ~b packages)~n", Args)
+    end, Cfg),
+    Printer = fun(Iter, Fun0, {Acc0, Ignore0, N0, X0}) ->
+        epm_pkg:foldl(fun(Pkg, {Acc, Ignore1, _N1, X}) ->
+            Name = epm_pkg:get(name, Pkg),
+            Out = io_lib:format("~" ++ integer_to_list(N0) ++ ".s~s:~s=~s"
+                , ["= "] ++ epm_pkg:get([catalog, name, version], Pkg)),
+            case lists:member(Name, Ignore1) of
+                true ->
+                    Acc1 = io_lib:format("~s~s (defined previously)~n", [Acc, Out]),
+                    {Acc1, Ignore1, N0, X};
+                false ->
+                    Acc1 = io_lib:format("~s~s~n", [Acc, Out]),
+                    Fun0(Pkg, Fun0, {Acc1, [Name | Ignore1], N0 + 2, X + 1})
+            end
+        end, {Acc0, Ignore0, N0, X0}, Iter)
+    end,
+    {Output, _, _, Count} = Printer(Cfg, Printer, {"", [], 2, 0}),
+    io:format("~nDependencies (~b/~b):~n",
+        [length(epm:get(deps, Cfg)), Count]),
+    io:format("~s~n", [Output]);
 
 target(["sign"], _Opts) ->
-    epm_utils:err("sign: not implemented");
+    epm:log(error, "sign: not implemented");
 
 target(["key"], Opts) ->
     target(["key", "help"], Opts);
@@ -189,16 +211,16 @@ target(["key", "help"|_], _Opts) ->
         "~n");
 
 target(["key", "import"], _Opts) ->
-    epm_utils:err("key import: not implemented");
+    epm:log(error, "key import: not implemented");
 
 target(["key", "revoke"], _Opts) ->
-    epm_utils:err("key revoke: not implemented");
+    epm:log(error, "key revoke: not implemented");
 
 target(["key", "generate"], _Opts) ->
-    epm_utils:err("key generate: not implemented");
+    epm:log(error, "key generate: not implemented");
 
 target(["key", "list"], _Opts) ->
-    epm_utils:err("key generate: not implemented");
+    epm:log(error, "key generate: not implemented");
 
 target(Args, _Opts) ->
     io:format("unknown command ~p~n", [Args]),

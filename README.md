@@ -1,4 +1,4 @@
-# EPM
+# Introduction
 
 Todays state of erlang dependency manager is, work in progress...
 EPM will try to handle working dependencies with dependencies in a more
@@ -12,16 +12,147 @@ Features:
 
 + Deterministic dependencies
 + Dynamic handling of repository/dependency remotes, branches etc
-+ Handles repositories of dependencies vs single dependency
++ Handles catalogs of dependencies vs single dependency
 + When specifying a version make sure that version will be used
 	(even for recursive dependencies) instead of random error because of
-	update-deps not working correctly.
+	update-deps tried to checkout a non existing ref and now you don't
+  have an .app file.....
 + Support for multiple repository backends (only github for now)
-+ Compiles to single binary
++ Compiles to single binary without requirement for erlang (maybe?)
 
-Will probably add Support for dependency snapshots, which would lock
+Will probably add support for dependency snapshots, which would lock
 dependencies at commit time (only git support?).
 
+## Catalogs
+
+All `packages` resides within 1 catalog, the catalog is managed by a
+developer or an organization. Catalogs contains a list of `packages`
+and additionally a set of keys used for signing (not implemented).
+
+Catalogs must export 4 functions:
+
+`name/0 :: binary()`
+Unique name used for path generation
+
+`match/1 :: (binary()) -> boolean()`
+Match function determining if a resource belongs to the catalog.
+
+`resource/2 :: (#pkg{}, #ctl{}) -> URL :: binary()`
+Build a URL used for fetching remote
+
+`fetch/1 :: (A :: binary()) -> #catalog{}`
+Fetches list of packages from remote server
+
+`search/1 :: (A :: binary()) -> [#pkg{}]`
+Search the remote catalog for package, returns a list of matching
+packages.
+
+`sync/1 :: (Resource :: binary(), _) -> boolean()`
+Syncs a package to the local store. The second argument is reserved
+for `source handler` hinting.
+
+## Packages
+
+A remote resource containing some source code. Once synced additional
+information can be retrieved, mainly the version number and a list of
+additional dependencies. This information is stored in one or more
+configuration files (ie. `rebar.config` and `*.app`).
+
+## Parsers
+
+To be able to handle a multitude of configuration variants several
+parsers are bundled with EPM. Each parser acts as an adapter to other
+build tools/package managers.
+
+A parser must export the following functions:
+
+`parse/2 :: (file:filename(), epm_pkg:pkg()) ->
+	{[epm_catalog:catalog()], [epm_pkg:pkg()]} | false`
+Parses the configuration for a file, returns the catalogs/pkgs found
+or false if a error occured (if a path is not valid for that config,
+it's not considered an error and should return `{[], []}`.
+
+## Agents
+
+All the action is handled by a plug-in agent, there will typically
+be 1 agent pr. version control system. GIT is the only supported
+backend at the moment. In the future a plug-in for local filesystem
+and HTTP might be added.
+
+Agents must export the following functions:
+
+`name/0` :: () -> binary()`
+Return the name of the agent (ie `git`, `http`)
+
+`init/1 :: (epm_pkg:pkg()) -> epm_pkg:pkg()`
+Initiate the agent for a package, this will be called during config
+parsing and can be used to set any additional options for the pkg.
+
+`fetch/2 :: (epm_pkg:pkg(), epm:cfg()) -> ok | {error, Reason :: term()}`
+Checks if there are any available updates for this package.
+
+`sync/2 :: (epm_pkg:pkg(), epm:cfg()) -> ok | {error, Reason :: term()}`
+Syncs the local copy of the package with any remote updates.o
+
+`status/2` :: (epm_pkg:pkg(), epm:cfg()) -> ok | stale | unknown`
+Check the current known state of the package - sideeffect free.
+
+## env/config notes
+
++ __opt:ignore_codepath__: Flag to tell backends to not change _codepath_,
+  useful when only checking to see if there are updates (git fetch)
++ __env:dryrun__: Don't do any hard work, check should be implemented
+  in backend private methods.
++ __env:autofetch__: Automatically fetch everything that's needed.
++ __env:cachedir__: The root cache directory
++ __env:libdir__: Where to store those precious libraries.
++ __env:verbosity__: What level of output to give
+
+# Examples
+
+## Usage (Erlang API)
+
+### Lists all package versions
+
+```erlang
+1> {ok, Cfg} = epm:parse("."),
+1> epm_pkg:map(fun(Pkg) -> epm_pkg:get([name, version], Pkg) end, Cfg).
+[[<<"lager">>,<<"1.2.1">>],[<<"cowboy">>,<<"0.8.3">>]]
+```
+
+### Sync all dependencies recursively
+
+```erlang
+%% epm:parse/1 is side-effect free, therefor a explicit call to fetch
+%% is required.
+2> Fetch = fun(Pkg, Fun) ->
+2>	epm_pkg:sync(Pkg),
+2>	{ok, Cfg} = epm:parse(epm_pkg:get(path, Pkg)),
+2>	Fun(Cfg)
+2> end,
+2> epm_pkg:foreach(fun(Pkg) -> Fetch(Pkg, Fetch) end, Cfg).
+ok
+```
+
+### Find conflicting packages (the naive way)
+
+The following example expands the dependencies to their version which
+can easily be used to lookup possible version conflicts.
+
+```erlang
+{ok, Cfg} = epm:parse("."),
+Pkgs0 = epm_pkg:flatten(Cfg),
+Pkgs1 = [epm_pkg:get([name, catalog, version], P) || P <- Pkgs0],
+Pkgs = lists:usort(Pkgs1), % Fixes identical duplicates
+{_, Duplicates0} = lists:foldl(
+		fun([Name|_] = P, {Acc0, Acc1}) ->
+			case lists:keyfind(Name, 1, Acc0) of
+				{Name, Prev} -> {Acc0, [P,Prev | Acc1]};
+				false -> {[{Name, P} | Acc0], Acc1}
+			end
+		end, {[], []}, Pkgs),
+Duplicates = lists:usort(Duplicates0). % Fold copies first value multiple times
+```
 
 ## Usage (CLI)
 
@@ -100,20 +231,4 @@ Dependencies:
 = erlydtl:c18f2a00 (riak_control) [<<"github.evanmiller">>];
 ....
 = lager:1.2.2 (riaknostic) [<<"github.basho">>];
-```
-
-## Usage (Erlang API)
-
-__Print out the current known configuration:__
-
-```erlang
-epm_config:print(epm_config:parse(".")).
-```
-
-__Fetch/Update all depenencies:__
-
-```erlang
-%% Fetches a local copy to .cache/<publisher>/<dep> and then makes a
-%% local clone to lib/<dep>-<vsn>.
-[epm_deps:update(Dep) || Dep <- epm_config:deps(epm_config:parse("."))].
 ```

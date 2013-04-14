@@ -1,17 +1,17 @@
 #/bin/bash
 
-basedir=${1:-"."}
-conffile=${basedir}/epm.config
+conffile=${1:-"."}
+[ -f "$conffile" ] || conffile="${conffile}/epm.config"
 tmpfile=.cfg-parser
-
-if [ ! -r "${conffile}" ]; then
-	echo "error: ${conffile} not found."
-	exit 1
-fi
 
 err() {
 	echo $1 >&2
 }
+
+if [ ! -r "${conffile}" ]; then
+	err "error: ${conffile} not found, not readable"
+	exit 1
+fi
 
 grep -nP '^[a-z\t]' $conffile > $tmpfile
 targets=$(grep -P '[0-9]+:[a-z].*' $tmpfile | sed -E 's/\s+//g')
@@ -24,7 +24,15 @@ for target in $targets; do
 	fi
 done
 
-sed -E 's/[0-9]+://;s/([^^])\s+/\1/g;s/^\s/ /' $tmpfile
-rm $tmpfile
+sed -nE '
+s/^[^a-z \t].*//;/^$/d;   # remove non-parsable lines
+/\[/ { :r;                # Start loop looking for end ]
+	/\]/!N;
+	s/,?\n/,/;s/\[,/[/;   # Concatenate lines and fix commas
+	tr};                  # If ending ] is not found, repeat
+s/(.)\s+/\1/g; s/^\s+/ /; # Normalize spaces
+p' $conffile
+
+rm $tmpfile 2> /dev/null
 
 exit 0
