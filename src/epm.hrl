@@ -19,7 +19,7 @@
 	, paths = [] :: [[binary()]]
 	}).
 
--define(epmpp(Path), "bin/epmpp " ++ Path).
+-define(epmpp(Path), filename:join(epm:get(basedir), "bin/epmpp") ++ " " ++ Path).
 
 -define(backends, [epm_backend_github, epm_backend_git, epm_backend_file]).
 
