@@ -34,7 +34,7 @@ main(Args) ->
 parse_args([], Acc) -> Acc;
 parse_args(_, error) -> error;
 parse_args(["-v", Verbosity | T], _) ->
-    epm:set(verbosity, Verbosity),
+    epm:set(verbosity, [err,warning,info,debug]),
     parse_args(T, ok);
 parse_args(["-d" | T], _) ->
     epm:set(dryrun, true),

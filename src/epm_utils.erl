@@ -51,19 +51,27 @@ info(Msg) ->
 	info(Msg, []).
 
 info(Msg, Args) ->
-	?format(info, Msg, Args).
+	on_verbosity(info, fun() -> ?format(info, Msg, Args) end).
 
 debug(Msg) ->
 	debug(Msg, []).
 
 debug(Msg, Args) ->
-	?format(debug, Msg, Args).
+	on_verbosity(debug, fun() -> ?format(debug, Msg, Args) end).
 
 err(Msg) ->
 	err(Msg, []).
 
 err(Msg, Args) ->
-	?format(error, Msg, Args).
+	on_verbosity(err, fun() -> ?format(error, Msg, Args) end).
+
+on_verbosity(Lvl, Fun) ->
+	case lists:member(Lvl, epm:get(verbosity)) of
+		true ->
+			Fun();
+		false ->
+			ok
+	end.
 
 -spec cmd(iolist()) -> {ok, Out} | {error, {non_neg_integer(), Out}}
 	when Out :: string().

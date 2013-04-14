@@ -23,7 +23,7 @@ init(Args) ->
 		, lists:ukeysort(1, [
 			  {autofetch, true} % Automatically fetch deps when required
 			, {dryrun, false}   % Determines if side effects are allowed
-			, {verbosity, info} % What messages to display
+			, {verbosity, [err,warning,info]} % What messages to display
 			, {basedir, undefined} % The basedir of epm
 		])),
 	lists:foreach(fun({K,V}) -> set(K, V) end, Args2),
