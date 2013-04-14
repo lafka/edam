@@ -5,7 +5,7 @@
 %% consistency.consistent -> local copy found, is up to date
 -record(dep, {
 	  name  :: binary()
-	, repo = [] :: [{binary(), URL::binary()}] %% Repos containing a match
+	, repo = [] :: [{binary(), module(), URL::binary()}] %% Repos containing a match
 	, repos = [] :: [binary()] %% Repos allowed to search in
 	, version = any :: string() | any
 	, ref = any :: string() | any
