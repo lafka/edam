@@ -172,7 +172,13 @@ proc_consistency(Path, #dep{repo = [{Repo,Backend,_}|_]} = Dep) ->
 				, [Repo, Dep#dep.name, Dep#dep.version]),
 			Path2 = list_to_binary(Path),
 			%% @todo 2013-04-13; lafka - Make fetch recursive flag
-			{ok,_} = Backend:clone(Codepath, Repo, Path2, Dep#dep.ref),
+			case epm:get(autofetch) and not epm:get(dryrun) of
+				true ->
+					{ok,_} = Backend:clone(Codepath, Repo, Path2, Dep#dep.ref);
+				false ->
+					epm_utils:info("cannot determine dependencies for ~s"
+						", requires fetch of ~s", [Codepath, Repo])
+			end,
 			ok;
 		Dep2 ->
 			epm_utils:info("found local copy of ~s:~s=~s"
