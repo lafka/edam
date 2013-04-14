@@ -45,7 +45,9 @@ parse(Path, Pkg) ->
 %% pmerge: merge a child configuration
 pmerge(#dep{name = Name} = Pkg, A, B) ->
 	Paths = [ [Name | X] || X <- A#cfg.paths],
-	Deps = lists:keyreplace(Name, #dep.name, B#cfg.deps
+	Deps = lists:keyreplace(Name
+		, #dep.name
+		, B#cfg.deps
 		, Pkg#dep{deps = A#cfg.deps}),
 	B#cfg{repos = lists:ukeymerge(1, A#cfg.repos, B#cfg.repos)
 		, paths = lists:umerge(Paths, B#cfg.paths)

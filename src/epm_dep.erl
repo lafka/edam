@@ -93,7 +93,7 @@ do_update_repo(Path, #dep{repo = [{Repo, Backend, URL}|_]} = Dep) ->
 	end.
 
 -spec has_update(#dep{}) -> {Ret, Ret} when Ret :: true | false | missing | unknown.
-has_update(#dep{repo = [{Repo, Backend, URL}|_], name = Name, ref = Ref} = Dep) ->
+has_update(#dep{repo = [{Repo, Backend, URL}|_], ref = Ref} = Dep) ->
 	Cachepath = cachepath(Dep),
 	Codepath  = codepath(Dep),
 	case {filelib:is_dir(Cachepath), filelib:is_dir(Codepath)} of
