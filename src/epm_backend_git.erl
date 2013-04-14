@@ -76,7 +76,7 @@ has_updated_remote(Path, URL) ->
 	case epm_utils:cmd("git remote -v | grep fetch | awk '{print $2}'", [], Path) of
 		{ok, URL2} -> false;
 		{ok, Old} ->
-			epm_utils:info("remote changed: ~s -> ~s", [Old, URL2]),
+			epm_utils:info("git: remote changed: ~p -> ~p", [Old, URL2]),
 			{true, Old}
 	end.
 

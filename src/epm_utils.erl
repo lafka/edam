@@ -42,7 +42,7 @@
 
 -define(format(Type, Msg, Args),
 	{_, {H, M, S}} = erlang:universaltime(),
-	io:format("[~s] ~b:~b:~b -> " ++ Msg ++ "~n", [Type, H, M, S] ++ Args)).
+	io:format("[~s] ~.2b:~.2b:~.2b -> " ++ Msg ++ "~n", [Type, H, M, S] ++ Args)).
 
 -define(cache(File), binary_to_list(<<".cache/", File/binary>>)).
 -define(lib(Lib), binary_to_list(<<"lib/", Lib/binary>>)).

@@ -28,8 +28,8 @@ parse2(_Path, Pkg, Terms) ->
 						{Alias, Pkgs} = Backend:fetch(undefined, URL),
 						Cfg = Acc#cfg{repos = [{Alias, Backend, URL, Pkgs}|R]},
 						Dep = parse_dep({Name, Version, Src}, Alias),
-						epm_utils:debug("add dep: ~s", [Dep#dep.name]),
-						epm_utils:debug("add repo: ~s", [Alias]),
+						epm_utils:debug("rebar: add dep: ~s", [Dep#dep.name]),
+						epm_utils:debug("rebar: add repo: ~s", [Alias]),
 						add_dep(Cfg
 							, epm_dep:match_repos(Dep, Cfg)
 							, Pkg);
