@@ -33,8 +33,8 @@ match_repos(Name, #cfg{deps = Deps, repos = Repos}) ->
 	end.
 
 match_repos2(#dep{name = Name} = Dep, Repos) ->
-	lists:foldl(fun({RepoName,Backend,_URL,Repo}, Acc) ->
-		Match = lists:member(RepoName, Acc#dep.repos),
+	lists:foldl(fun({RepoName,Backend,_RepoURL,Repo}, Acc) ->
+		Match = lists:member(RepoName, Acc#dep.repos) orelse Acc#dep.repos =:= [],
 		case lists:keyfind(Name, 1, Repo) of
 			{Name, URL} when Match ->
 				Acc#dep{repo = [{RepoName, Backend, URL}|Acc#dep.repo]};
