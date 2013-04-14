@@ -43,16 +43,19 @@ parse2(_Path, Pkg, Terms) ->
 
 parse_dep({Name, ".*", Src}, Repo) ->
 	parse_dep({Name, any, Src}, Repo);
-parse_dep({Name, Vsn, Src}, Repo) ->
+parse_dep({Name, _Vsn, Src}, Repo) ->
 	Ref = case Src of
 		{git, _, {branch, Branch}} -> Branch;
 		{git, _, {tag, Tag}} -> Tag;
 		{git, _, R} -> R;
 		_ -> any end,
 	#dep{name = atom_to_binary(Name, unicode)
-		, version = Vsn
-		, ref = Ref
+		, version = case Ref of any -> any; Ref -> list_to_bin(Ref) end
+		, ref = list_to_bin(Ref)
 		, repos = [Repo]}.
+
+list_to_bin(X) when is_list(X) -> list_to_binary(X);
+list_to_bin(X) -> X.
 
 add_dep(#cfg{deps = Deps, paths = Paths} = Cfg, Dep, Pkg) ->
 	Cfg#cfg{
