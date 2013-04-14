@@ -24,12 +24,12 @@ match_repos(Name, #cfg{deps = Deps, repos = Repos}) ->
 	case lists:keyfind(Name, #dep.name, Deps) of
 		#dep{repos = []} when Repos =:= [] ->
 			epm_utils:err("dependency '~s' not found in any repos", [Name]),
-			false;
+			[];
 		#dep{repos = []} = Dep ->
 			match_repos2(Dep, Repos);
 		false ->
 			epm_utils:err("no such dependency '~p'", [Name]),
-			false
+			[]
 	end.
 
 match_repos2(#dep{name = Name} = Dep, Repos) ->

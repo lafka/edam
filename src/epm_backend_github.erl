@@ -44,7 +44,8 @@ fetch(Alias, Resource) ->
 			end;
 		X ->
 			err("github-backend: unknown resource: ~p~n~s"
-				, [X,fetch_alias(Alias, Resource)])
+				, [X,fetch_alias(Alias, Resource)]),
+			error
 	end.
 
 fetch_alias(undefined, User) ->
@@ -86,9 +87,9 @@ lookup_repos(Alias, URL, Acc) ->
 					epm_utils:save_cache(?cache(Alias), Ret),
 					Ret
 			end;
-		{ok,{{_,_,Status},_,_}} ->
-			err("~s: Some error with fetchin repos from gh~n", [Status]),
-			false
+		Err ->
+			err("req: Some error with fetchin repos from gh: ~p~n", [Err]),
+			[]
 	end.
 
 get_repo_name(<<"git://github.com/", Tail/binary>>) ->
