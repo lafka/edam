@@ -12,7 +12,7 @@ repositories <<
 
 % When setting it can also take a list
 % Dependencies can do the following:
-%  use a specific ref     -> #(dep) : #(ref)
+%  use a specific ref     -> #(dep) # #(ref)
 %  validate built version -> #(dep) = #(version)
 %  Use a specific repo    -> #(dep) @ #(repo identifier)
 dependencies <-

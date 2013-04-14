@@ -46,11 +46,11 @@ parse2(_Path, Pkg, Tokens) ->
 
 
 parse_dep(Arg) ->
-	[Name|Opts] = binary:split(Arg, [<<$:>>, <<$@>>, <<$=>>], [global]),
+	[Name|Opts] = binary:split(Arg, [<<$#>>, <<$@>>, <<$=>>], [global]),
 	{_, Ret} = lists:foldl(fun(Opt, {Pos, Dep}) ->
 			NewPos = Pos + size(Opt) + 1,
 			case binary:part(Arg, {Pos, 1}) of
-				<<$:>> ->
+				<<$#>> ->
 					{NewPos, Dep#dep{ref = Opt}};
 				<<$@>> ->
 					{NewPos, Dep#dep{repos = [Opt|Dep#dep.repos]}};
