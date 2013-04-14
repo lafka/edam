@@ -18,6 +18,8 @@
 
 -include("epm.hrl").
 
+-type path() :: Path | {ok, Path} | {error, {missing, Path}}.
+
 match_repos(#dep{} = Dep, #cfg{repos = Repos}) ->
 	match_repos2(Dep, Repos);
 match_repos(Name, #cfg{deps = Deps, repos = Repos}) ->
@@ -116,17 +118,21 @@ has_update(#dep{repo = [{Repo, Backend, URL}|_], ref = Ref} = Dep) ->
 check_path_status(Codepath, Backend, Repo, URL, Ref) ->
 	Backend:status(Codepath, Repo, URL, Ref, false).
 
+-spec cachepath(#dep{}) -> file:filename().
 cachepath(#dep{} = Dep) ->
 	cachepath(Dep, false).
 
+-spec cachepath(#dep{}, boolean()) -> path().
 cachepath(#dep{repo = [{Repo,_,_}|_], name = Name}, false) ->
 	epm_utils:cache_path(<<"dist/", Repo/binary, "/", Name/binary>>);
 cachepath(#dep{repo = [{Repo,_,_}|_], name = Name}, true) ->
 	path_exists(epm_utils:cache_path(<<"dist/", Repo/binary, "/", Name/binary>>)).
 
+-spec codepath(#dep{}) -> file:filename().
 codepath(#dep{} = Dep) ->
 	codepath(Dep, false).
 
+-spec codepath(#dep{}, boolean()) -> path().
 codepath(#dep{version = any, name = Name}, true) ->
 	path_exists(epm_utils:lib_path(<<Name/binary>>));
 codepath(#dep{version = Vsn, name = Name}, true) ->
