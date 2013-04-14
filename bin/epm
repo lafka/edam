@@ -37,7 +37,7 @@ parse_args([[$-, $v, $= | Verbosity]| T], _) ->
     Val = [list_to_atom(X) || X <- string:tokens(Verbosity, ",")],
     epm:set(verbosity, Val),
     parse_args(T, ok);
-parse_args(["-d" | T], _) ->
+parse_args([[$-, $d] | T], _) ->
     epm:set(dryrun, true),
     parse_args(T, ok);
 parse_args([Arg | T], _) ->
