@@ -35,7 +35,7 @@
 
 -record(pkg, {
 	  name :: binary()
-	, absname :: [binary()]
+	, absname = [] :: [binary()]
 	, pkgname :: binary()
 	, version = any :: binary() | any
 	, catalog = [] :: [epm_catalog:catalog()]
