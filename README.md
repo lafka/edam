@@ -3,9 +3,9 @@
 Todays state of erlang dependency manager is not optimal.
 EPM was designed to handle dependencies in more controlled way.
 
-https://hyperthunk.wordpress.com/2012/05/28/does-erlangotp-need-a-new-package-management-solution/
-http://lists.basho.com/pipermail/riak-users_lists.basho.com/2013-April/011777.html
-http://erlang.org/pipermail/erlang-questions/2012-October/069825.html
++ https://hyperthunk.wordpress.com/2012/05/28/does-erlangotp-need-a-new-package-management-solution/
++ http://lists.basho.com/pipermail/riak-users_lists.basho.com/2013-April/011777.html
++ http://erlang.org/pipermail/erlang-questions/2012-October/069825.html
 
 ## Features:
 
@@ -65,27 +65,39 @@ All `packages` resides within 1 catalog, the catalog is managed by a
 developer or an organization. Catalogs contains a list of `packages`
 and additionally a set of keys used for signing (not implemented).
 
-Catalogs must export 4 functions:
+Catalogs must export these functions:
 
-`name/0 :: binary()`
+```
+name/0 :: binary()
 Unique name used for path generation
+```
 
-`match/1 :: (binary()) -> boolean()`
+```
+match/1 :: (binary()) -> boolean()
 Match function determining if a resource belongs to the catalog.
+```
 
-`resource/2 :: (#pkg{}, #ctl{}) -> URL :: binary()`
+```
+resource/2 :: (#pkg{}, #ctl{}) -> URL :: binary()
 Build a URL used for fetching remote
+```
 
-`fetch/1 :: (A :: binary()) -> #catalog{}`
+```
+fetch/1 :: (A :: binary()) -> #catalog{}
 Fetches list of packages from remote server
+```
 
-`search/1 :: (A :: binary()) -> [#pkg{}]`
+```
+search/1 :: (A :: binary()) -> [#pkg{}]
 Search the remote catalog for package, returns a list of matching
 packages.
+```
 
-`sync/1 :: (Resource :: binary(), _) -> boolean()`
+```
+sync/1 :: (Resource :: binary(), _) -> boolean()
 Syncs a package to the local store. The second argument is reserved
 for `source handler` hinting.
+```
 
 ## Packages
 
@@ -102,11 +114,13 @@ build tools/package managers.
 
 A parser must export the following functions:
 
-`parse/2 :: (file:filename(), epm_pkg:pkg()) ->
-	{[epm_catalog:catalog()], [epm_pkg:pkg()]} | false`
+```
+parse/2 :: (file:filename(), epm_pkg:pkg()) ->
+	{[epm_catalog:catalog()], [epm_pkg:pkg()]} | false
 Parses the configuration for a file, returns the catalogs/pkgs found
 or false if a error occured (if a path is not valid for that config,
 it's not considered an error and should return `{[], []}`.
+```
 
 ## Agents
 
@@ -117,23 +131,35 @@ and HTTP might be added.
 
 Agents must export the following functions:
 
-`name/0` :: () -> binary()`
+```
+name/0` :: () -> binary()
 Return the name of the agent (ie `git`, `http`)
+```
 
-`init/1 :: (epm_pkg:pkg()) -> epm_pkg:pkg()`
+```
+init/1 :: (epm_pkg:pkg()) -> epm_pkg:pkg()
 Initiate the agent for a package, this will be called during config
 parsing and can be used to set any additional options for the pkg.
+```
 
-`fetch/2 :: (epm_pkg:pkg(), epm:cfg()) -> ok | {error, Reason :: term()}`
+```
+fetch/2 :: (epm_pkg:pkg(), epm:cfg()) -> ok | {error, Reason :: term()}
 Checks if there are any available updates for this package.
+```
 
-`sync/2 :: (epm_pkg:pkg(), epm:cfg()) -> ok | {error, Reason :: term()}`
+```
+sync/2 :: (epm_pkg:pkg(), epm:cfg()) -> ok | {error, Reason :: term()}
 Syncs the local copy of the package with any remote updates.o
+```
 
-`status/2` :: (epm_pkg:pkg(), epm:cfg()) -> ok | stale | unknown`
+```
+status/2` :: (epm_pkg:pkg(), epm:cfg()) -> ok | stale | unknown
 Check the current known state of the package - sideeffect free.
+```
 
 ## env/config notes
+
+**Note:** *don't worry to much about these, will be changed/removed or similar*
 
 + __opt:ignore_codepath__: Flag to tell backends to not change _codepath_,
   useful when only checking to see if there are updates (git fetch)
@@ -159,15 +185,14 @@ Check the current known state of the package - sideeffect free.
 ### Sync all known dependencies
 
 ```erlang
-%% epm:parse/1 is side-effect free, therefor a explicit call to fetch
-%% is required.
+%% epm:parse/1 is side-effect free, therefor a explicit call to fetch is required.
 2> epm_pkg:foreach(fun(Pkg) -> epm_pkg:sync(Pkg, Cfg) end, epm_pkg:flatten(Cfg)).
 ok
 ```
 
 ### Find conflicting versions of packages (the naive way)
 
-The following example expands the dependencies to their version which
+The following example expands the dependencies to `[Name, Version]` which
 can easily be used to lookup possible version conflicts.
 
 ```erlang
