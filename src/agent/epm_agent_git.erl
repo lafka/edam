@@ -46,45 +46,21 @@ fetch(Pkg, Cfg) ->
 	epm:log(notice, "agent:git: fetching ~s=~s (~s) from ~p"
 			, epm_pkg:get([pkgname, version, name, catalog], Pkg)),
 
-	case epm_pkg:get(catalog, Pkg) of
-		[] ->
-			epm:log(error, "agent:git:fetch: ~s: cannot fetch pkg ~s, not found in any catalogs"
-				, [?MODULE, epm_pkg:get(name, Pkg)]),
-			{error, no_catalog};
-		[CtName|_] ->
-			[Catalog] = epm_catalog:select({name, CtName}, Cfg),
-			fetch_pkg(Pkg, Catalog, Cfg)
-	end.
+	fetch_pkg(Pkg, epm_pkg:get(catalog, Pkg), Cfg).
 
 -spec sync(epm_pkg:pkg(), epm:cfg()) -> ok | {error, Reason :: term()}.
 sync(Pkg, Cfg) ->
 	epm:log(notice, "agent:git: syncing ~s=~s (~s) from ~p"
 			, epm_pkg:get([pkgname, version, name, catalog], Pkg)),
 
-	case epm_pkg:get(catalog, Pkg) of
-		[] ->
-			epm:err("agent:git:sync: ~s: cannot fetch pkg ~s, not found in any catalogs"
-				, [?MODULE, epm_pkg:get(name, Pkg)]),
-			{error, no_catalog};
-		[CtName|_] ->
-			[Catalog] = epm_catalog:select({name, CtName}, Cfg),
-			fetch_pkg(Pkg, Catalog, Cfg)
-	end.
+	fetch_pkg(Pkg, epm_pkg:get(catalog, Pkg), Cfg).
 
 -spec status(epm_pkg:pkg(), epm:cfg()) -> ok | stale | missing | {error, Reason :: term()}.
 status(Pkg, Cfg) ->
 	epm:log(notice, "agent:git: syncing ~s=~s (~s) from ~p"
 			, epm_pkg:get([pkgname, version, name, catalog], Pkg)),
 
-	case epm_pkg:get(catalog, Pkg) of
-		[] ->
-			epm:log(error, "agent:git:status: cannot fetch pkg ~s, not found in any catalogs"
-				, [epm_pkg:get(name, Pkg)]),
-			{error, no_catalog};
-		[CtName|_] ->
-			[Catalog] = epm_catalog:select({name, CtName}, Cfg),
-			status(Pkg, Catalog, Cfg)
-	end.
+	status(Pkg, epm_pkg:get(catalog, Pkg), Cfg).
 
 -spec status(epm_pkg:pkg(), epm_catalog:catalog(), epm:cfg())
 	-> ok | stale | missing | {error, Reason :: term()}.
@@ -119,16 +95,18 @@ fetch_pkg(Pkg, Catalog, Cfg) ->
 			ok = epm_git:clone(CodePath, Ref, CachePath, Cfg)
 	end.
 
-update_cache(Pkg, Catalog, Cfg) ->
-	update_cache(Pkg, Catalog, Cfg, true).
+update_cache(Pkg, Catalogs, Cfg) ->
+	update_cache(Pkg, Catalogs, Cfg, true).
 
-update_cache(Pkg, Catalog, Cfg, AutoFetch) ->
+update_cache(Pkg, Catalogs, Cfg, AutoFetch) ->
 	CachePath = buildpath(Pkg, true, Cfg),
 
-	Mod = epm_catalog:get(module, Catalog),
 	{ok, Remote} = case epm_pkg:get({agent, remote}, Pkg) of
-			undefined -> Mod:resource(Pkg, Catalog);
-			Remote0 -> {ok, Remote0} end,
+			undefined when [] =/= Catalogs->
+				{ok, Catalog} = get_catalog(Catalogs, Cfg),
+				Mod = epm_catalog:get(module, Catalog),
+				Mod:resource(Pkg, Catalog);
+			Remote0 when Remote0 =/= undefined -> {ok, Remote0} end,
 
 	case {filelib:is_dir(CachePath), AutoFetch and epm:env(autofetch)} of
 		{true, true} ->
@@ -138,6 +116,16 @@ update_cache(Pkg, Catalog, Cfg, AutoFetch) ->
 			ok = epm_git:clone(CachePath, "master", Remote, Cfg);
 		{_, false} ->
 			ok
+	end.
+
+get_catalog([], _) ->
+	false;
+get_catalog([CtName | Tail], Cfg) ->
+	case epm_catalog:select({name, CtName}, Cfg) of
+		[] ->
+			get_catalog(Tail, Cfg);
+		[Catalog | _] ->
+			{ok, Catalog}
 	end.
 
 %% builds target path for pkg, if Cache =:= true then build the cached path
@@ -153,9 +141,13 @@ buildpath(Pkg, Cache, _Cfg) ->
 
 	case Cache of
 		true ->
+			CacheDir = case epm_pkg:get(catalog, Pkg) of
+				[] -> <<"default">>;
+				[M | _] -> M end,
+
 			filename:join([epm:env(cachedir, <<".cache">>)
 				, "dist"
-				, epm_os:escape_filename(hd(epm_pkg:get(catalog, Pkg)))
+				, epm_os:escape_filename(CacheDir)
 				, epm_pkg:get(name, Pkg)
 				 ]);
 		false ->

@@ -22,11 +22,12 @@ parse2(_Path, Pkg, Terms) ->
 				URL = list_to_binary(erlang:element(2, Src)),
 				case epm_catalog:new(undefined, URL) of
 					{ok, Ctl} ->
+						Dep = parse_dep(RawDep, [epm_catalog:get(name, Ctl)], Pkg),
 						{ [Ctl | Ctls]
-						, [parse_dep(RawDep, Ctl, Pkg) | Deps]};
+						, [Dep | Deps]};
 					false ->
-						epm:log(error, "rebar: no matching backend ~s", [URL]),
-						{Ctls, Deps}
+						Dep = parse_dep(RawDep, [], Pkg),
+						{Ctls, [Dep | Deps]}
 				end
 			end, {[], []}, Deps0);
 		false ->
@@ -42,16 +43,14 @@ parse_dep({Name, _Vsn, Src}, Ctl, Parent) ->
 		{git, Rem, Ref0} -> {Rem, Ref0};
 		{git, Rem} -> {Rem, "master"};
 		_ -> exit(badarg, [Name, _Vsn, Src]) end,
+
 	Version = case Ref of any -> any; Ref -> list_to_bin(Ref) end,
-	Path = case epm:env(rebar_compatability, true) of
-		true -> filename:join("deps", atom_to_binary(Name, unicode));
-		false -> undefined end,
 	BinName = atom_to_binary(Name, unicode),
+
 	epm_pkg:new(BinName, [
 		  {absname, [BinName | epm_pkg:get(absname, Parent)]}
 		, {version, Version}
-		, {catalog, [epm_catalog:get(name, Ctl)]}
-		, {path, Path}
+		, {catalog, Ctl}
 		, {{agent, ref}, Ref}
 		, {{agent, remote}, list_to_binary(Remote)}
 		]).
