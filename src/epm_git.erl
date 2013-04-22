@@ -59,6 +59,13 @@ clone(Path, Ref, Remote, Cfg) ->
 
 
 -spec status(file:filename_all(), ref(), epm:cfg()) -> stale | ret().
+status(Path, '_', Cfg) ->
+	case tags(Path) of
+		[Tag | _] ->
+			status(Path, Tag, Cfg);
+		[] ->
+			status(Path, any, Cfg)
+	end;
 status(Path, any, Cfg) ->
 	status(Path, ref(Path), Cfg);
 status(Path, Ref, _Cfg) ->
