@@ -116,7 +116,7 @@ enc(K, <<"\"", Val/binary>>) ->
 	{K, binary:part(Val, 0, size(Val) - 1)};
 enc(K, <<C/integer, _/binary>> = Val) when C >= $0, C =< $9 ->
 	{K, list_to_integer(binary_to_list(Val))};
-enc(K, <<C/integer, _/binary>> = Val) when C >= $a, C =< $z ->
+enc(K, <<C/integer, _/binary>> = Val) when C =:= $_; (C >= $a andalso C =< $z) ->
 	{K, binary_to_atom(Val, unicode)};
 enc(K, V) ->
 	{K, V}.

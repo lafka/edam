@@ -106,8 +106,8 @@ status(Pkg, Catalog, Cfg) ->
 fetch_pkg(Pkg, Catalog, Cfg) ->
 	update_cache(Pkg, Catalog, Cfg),
 
-	CachePath = buildpath(Pkg, true, Cfg),
 	CodePath = buildpath(Pkg, false, Cfg),
+
 	Ref = epm_pkg:get({agent, ref}, Pkg),
 
 	case filelib:is_dir(CodePath) of
@@ -115,6 +115,7 @@ fetch_pkg(Pkg, Catalog, Cfg) ->
 			ok = epm_git:fetch(CodePath, Cfg),
 			ok = epm_git:checkout(CodePath, Ref, Cfg);
 		false ->
+			CachePath = buildpath(Pkg, true, Cfg),
 			ok = epm_git:clone(CodePath, Ref, CachePath, Cfg)
 	end.
 

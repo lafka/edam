@@ -13,13 +13,16 @@
 	  remote/1
 	, set_remote/2
 	, ref/1
+	, tags/1
 	]).
 
 -type ret() :: ok | {error, term()}.
--type ref() :: binary().
+-type ref() :: binary() | '_'.
 -type remote() :: binary().
 
 -spec checkout(filename:filename_all(), ref(), epm:cfg()) -> ret().
+checkout(Path, '_', Cfg) ->
+	checkout(Path, hd(tags(Path)), Cfg);
 checkout(Path, Ref, _Cfg) ->
 	Cmd = io_lib:format("git checkout ~s", [Ref]),
 
@@ -40,20 +43,18 @@ fetch(Path, _Cfg) ->
 
 
 -spec clone(file:filename_all(), ref(), remote(), epm:cfg()) -> ret().
-clone(Path, Ref, Remote, _Cfg) ->
+clone(Path, Ref, Remote, Cfg) ->
 	Cmd1 = io_lib:format("git clone ~s ~s", [Remote, Path]),
-	Cmd2 = io_lib:format("git checkout ~s", [Ref]),
 
 	%% @todo 2013-04-20; make dryrun part of config not env
 	epm:unless(dryrun
 		, fun() ->
 			ok = call(Cmd1, ok, {error, clone}),
-			call(Cmd2, Path, ok, {error, clone})
+			checkout(Path, Ref, Cfg)
 		end
 		, fun() ->
 			{ok, Cwd} = file:get_cwd(),
-			epm:log(command, "~s $ ~s", [Cwd, Cmd1]),
-			epm:log(command, "~s $ ~s", [Path, Cmd2])
+			epm:log(command, "~s $ ~s", [Cwd, Cmd1])
 		end).
 
 
@@ -116,6 +117,15 @@ ref(Path) ->
 			epm:log(error, "git: failed to get ref from '~s':~n~s"
 				, [Path, Err]),
 			{error, ref}
+	end.
+
+-spec tags(file:filename_all()) -> [ref()].
+tags(Path) ->
+	case filelib:is_dir(Path) andalso epm_os:cmd("git tag -l", [], Path) of
+		{ok, Tags} ->
+			string:tokens(Tags, "\n");
+		false ->
+			[]
 	end.
 
 %% @private perform os call
