@@ -10,7 +10,7 @@ EPM was designed to handle dependencies in more controlled way.
 ## Features:
 
 + Drop-in replacement for Rebar dependency management
-+ Pr. project configuration
++ Isolated dependencies pr. project
 + Deterministic checkout, no need to deps at specific position in config
 + Modular codebase with hooks for most common operations
 + Supports remote catalogs for simplifying dependency management
@@ -37,23 +37,23 @@ EPM was designed to handle dependencies in more controlled way.
 
 #### Checkout
 + Make libdir/append_versions pkg specific (in config).
-+ Add isolate option to build pr.pkg local depedency tree
++ Add isolate option to build pr.pkg local depedency tree \*\*
 + Fix automatic catalog selection AND catalog priority
-+ Make cached version of git use mirror to forward remote branches
++ Make cached version of git use mirror to forward remote branches \*\*
 
 #### Performance
 + Flatten and merge deps list before iterating
 
 ##### Conflicts
 + Find and warn about packages with version conflicts.
-+ Find and warn about auto configured packages with multiple available backends
++ Find and warn about auto configured packages with multiple available catalogs?
 
 # Various resolve functionality
 + Fix cache expiry of github catalogs
 + Add HTTP agent
 + Add local agent
 + Add gitorious catalog
-+ Add void catalog (1:1 repo mapping)
++ Add void catalog (1:1 repo mapping) \*\*
 + Add bitbuck catalog
 + Add localfs catalog
 + Add search functionality to github catalog
