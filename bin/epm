@@ -12,12 +12,13 @@ main(Args) ->
         Dir = get_codepath(escript:script_name()),
         true = code:add_path(filename:join([Dir, "ebin"])),
         epm:init([{basedir, Dir}]),
-        {Cmd, Opts} = lists:partition(fun(
-              [$-|_]) -> false; (_) -> true end
-            , Args),
-        case parse_args(Opts, []) of
-            {ok, Opts2} ->
-                epm:log(debug, "args: ~p, global: ~p, inner: ~p", [Cmd, Opts, Opts2]),
+        case parse_args(Args, []) of
+            {ok, Opts} ->
+                {Cmd0, Opts2} = lists:partition(fun(
+                      [$-|_]) -> false; (_) -> true end
+                    , Opts),
+                Cmd = lists:reverse(Cmd0),
+                epm:log(debug, "args: ~p, cmd: ~p, inner: ~p", [Args, Cmd, Opts2]),
                 target(Cmd, Opts2);
             error ->
                 ok
@@ -29,9 +30,14 @@ main(Args) ->
 
 parse_args([], Acc) -> {ok, Acc};
 parse_args(_, error) -> error;
-parse_args(["-v=" ++ Verbosity | T], Acc) ->
-    Val = list_to_atom(Verbosity),
-    epm:set_env(log_level, Val),
+parse_args(["--debug" | T], Acc) ->
+    epm:set_env(log_level, debug),
+    parse_args(T, Acc);
+parse_args(["--notice" | T], Acc) ->
+    epm:set_env(log_level, notice),
+    parse_args(T, Acc);
+parse_args(["--quiet" | T], Acc) ->
+    epm:set_env(log_level, error),
     parse_args(T, Acc);
 parse_args(["-d" | T], Acc) ->
     epm:set_env(dryrun, true),
@@ -42,6 +48,10 @@ parse_args(["--rebar" | T], Acc) ->
     epm:set_env(append_versions, false),
     epm:set_env(libdir, "deps"),
     epm:log(info, "epm: setting rebar compatability"),
+    parse_args(T, Acc);
+parse_args(["--env", Env | T], Acc) ->
+    epm:log(info, "epm: using env '~s'", [Env]),
+    epm:set_env(env, list_to_binary(Env)),
     parse_args(T, Acc);
 parse_args([Arg | T], Acc) ->
     parse_args(T, [Arg | Acc]).
@@ -73,8 +83,12 @@ usage() ->
         " OPTIONS:~n"
         "==========================================================~n"
         "~n"
-        " -v <lvl>       Level of output to display~n"
+        " --debug        Set output level to debug~n"
+        " --notice       Set output level to notice~n"
+        " --quiet        Only output errors~n"
         " -d, --dry-run  Dry run, don't actually do anything~n"
+        " --rebar        Use rebar compatability~n"
+        " --env <env>    Match EPM config against specific env~n"
         ).
 
 target(["help" | _], _Opts) ->
@@ -188,6 +202,10 @@ target(["deps", "print", Path], _Opts) ->
         [length(epm:get(deps, Cfg)), Count]),
     io:format("~s~n", [Output]);
 
+target(["deps" | Arg], _Opts) ->
+    io:format("epm deps: unknown command: ~p~n", [Arg]),
+    target(["deps", "help"], []);
+
 target(["sign"], _Opts) ->
     epm:log(error, "sign: not implemented");
 
@@ -223,5 +241,5 @@ target(["key", "list"], _Opts) ->
     epm:log(error, "key generate: not implemented");
 
 target(Args, _Opts) ->
-    io:format("unknown command ~p~n", [Args]),
+    io:format("unknown command ~p~n~n", [Args]),
     usage().
