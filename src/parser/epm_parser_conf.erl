@@ -14,21 +14,36 @@ parse(Path, Pkg) ->
 	end.
 
 parse2(_Path, _Pkg, Tokens) ->
-	{_, Acc} = lists:foldl(fun
+	{Size, CfgEnv} = {size(epm:env(env, <<"default">>)), epm:env(env, <<"default">>)},
+	{_, {C, D}} = lists:foldl(fun
 		(<<"catalogs<-">>, {_, {_, Deps}}) ->
 			{catalog, {[], Deps}};
 		(<<"catalogs<<">>, {_, Acc}) ->
 			{catalog, Acc};
+		(<<"catalogs:", Env/binary>>, {_, Acc}) ->
+			case Env of
+				<<CfgEnv, "<<">> -> {catalog, Acc};
+				_ -> {skip, Acc}
+			end;
 		(<<"dependencies<-">>, {_, {Catalogs, _}}) ->
 			{dep, {Catalogs, []}};
 		(<<"dependencies<<">>, {_, Acc}) ->
 			{dep, Acc};
+		(<<"dependencies:", Env/binary>>, {_, Acc}) ->
+			case Env of
+				<<CfgEnv:Size/binary, "<<">> ->
+					epm:log(info, "match ~p / ~p", [<<CfgEnv/binary, "<<">>, Env]),
+					{dep, Acc};
+				_ -> {skip, Acc}
+			end;
+		(<<" ", _/binary>>, {skip, Acc}) ->
+			{skip, Acc};
 		(<<" ", Arg/binary>>, {catalog, {Catalogs, Deps}}) ->
 			{catalog, match_catalog(Arg, Catalogs, Deps)};
 		(<<" ", Arg/binary>>, {dep, {Catalogs, Deps}}) ->
 			{dep, match_dep(Arg, Catalogs, Deps)}
 	end, {none, {[], []}}, [list_to_binary(X) || X <- Tokens]),
-	Acc.
+	{C, lists:reverse(D)}.
 
 match_catalog(Arg, Catalogs, Deps) ->
 	{Alias, URL} = case binary:split(Arg, <<"<-">>) of
@@ -87,8 +102,9 @@ parse_opts(Args) ->
 parse_opts([], Acc) ->
 	Acc;
 parse_opts([H | T], Acc) ->
-	[Key, Val] = binary:split(H, <<$=>>),
-	parse_opts(T, [{enc_key(Key), enc_val(Val)} | Acc]).
+	[Key0, Val] = binary:split(H, <<$=>>),
+	Key = enc_key(Key0),
+	parse_opts(T, [enc(Key, Val) | Acc]).
 
 enc_key(Key0) ->
 	case [binary_to_atom(P, unicode) || P <- binary:split(Key0, <<$.>>)] of
@@ -96,7 +112,11 @@ enc_key(Key0) ->
 		KeyParts -> list_to_tuple(KeyParts)
 	end.
 
-enc_val(<<"\"", Val/binary>>) ->
-	binary:part(Val, 0, size(Val) - 1);
-enc_val(Val0) ->
-	Val0.
+enc(K, <<"\"", Val/binary>>) ->
+	{K, binary:part(Val, 0, size(Val) - 1)};
+enc(K, <<C/integer, _/binary>> = Val) when C >= $0, C =< $9 ->
+	{K, list_to_integer(binary_to_list(Val))};
+enc(K, <<C/integer, _/binary>> = Val) when C >= $a, C =< $z ->
+	{K, binary_to_atom(Val, unicode)};
+enc(K, V) ->
+	{K, V}.
