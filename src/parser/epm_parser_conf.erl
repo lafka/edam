@@ -15,9 +15,9 @@ parse(Path, Pkg) ->
 
 parse2(_Path, _Pkg, Tokens) ->
 	{Size, CfgEnv} = {size(epm:env(env, <<"default">>)), epm:env(env, <<"default">>)},
-	{_, {C, D}} = lists:foldl(fun
-		(<<"catalogs<-">>, {_, {_, Deps}}) ->
-			{catalog, {[], Deps}};
+	{_, {Cats, Deps, Cb}} = lists:foldl(fun
+		(<<"catalogs<-">>, {_, {_, Deps, Cb}}) ->
+			{catalog, {[], Deps, Cb}};
 		(<<"catalogs<<">>, {_, Acc}) ->
 			{catalog, Acc};
 		(<<"catalogs:", Env/binary>>, {_, Acc}) ->
@@ -25,38 +25,38 @@ parse2(_Path, _Pkg, Tokens) ->
 				<<CfgEnv, "<<">> -> {catalog, Acc};
 				_ -> {skip, Acc}
 			end;
-		(<<"dependencies<-">>, {_, {Catalogs, _}}) ->
-			{dep, {Catalogs, []}};
+		(<<"dependencies<-">>, {_, {Catalogs, _, _Cb}}) ->
+			{dep, {Catalogs, [], []}};
 		(<<"dependencies<<">>, {_, Acc}) ->
 			{dep, Acc};
 		(<<"dependencies:", Env/binary>>, {_, Acc}) ->
 			case Env of
 				<<CfgEnv:Size/binary, "<<">> ->
-					epm:log(info, "match ~p / ~p", [<<CfgEnv/binary, "<<">>, Env]),
 					{dep, Acc};
-				_ -> {skip, Acc}
+				_ ->
+					{skip, Acc}
 			end;
 		(<<" ", _/binary>>, {skip, Acc}) ->
 			{skip, Acc};
-		(<<" ", Arg/binary>>, {catalog, {Catalogs, Deps}}) ->
-			{catalog, match_catalog(Arg, Catalogs, Deps)};
-		(<<" ", Arg/binary>>, {dep, {Catalogs, Deps}}) ->
-			{dep, match_dep(Arg, Catalogs, Deps)}
-	end, {none, {[], []}}, [list_to_binary(X) || X <- Tokens]),
-	{C, lists:reverse(D)}.
+		(<<" ", Arg/binary>>, {catalog, {Catalogs, Deps, Callbacks}}) ->
+			{catalog, match_catalog(Arg, Catalogs, Deps, Callbacks)};
+		(<<" ", Arg/binary>>, {dep, {Catalogs, Deps, Callbacks}}) ->
+			{dep, match_dep(Arg, Catalogs, Deps, Callbacks)}
+	end, {none, {[], [], []}}, [list_to_binary(X) || X <- Tokens]),
+	{Cats, lists:reverse(Deps), Cb}.
 
-match_catalog(Arg, Catalogs, Deps) ->
+match_catalog(Arg, Catalogs, Deps, Callbacks) ->
 	{Alias, URL} = case binary:split(Arg, <<"<-">>) of
 		[A, U] -> {A, U};
 		[U] -> {undefined, U} end,
 	case epm_catalog:new(Alias, URL) of
 		{ok, Catalog} ->
-			{[Catalog | Catalogs], Deps};
+			{[Catalog | Catalogs], Deps, Callbacks};
 		false ->
-			{Catalogs, Deps}
+			{Catalogs, Deps, Callbacks}
 	end.
 
-match_dep(Arg0, Catalogs, Deps) ->
+match_dep(Arg0, Catalogs, Deps, Callbacks) ->
 	{Arg, ExtraOpts} = parse_opts(Arg0),
 	[Name|Attrs] = binary:split(Arg, [<<$#>>, <<$@>>, <<$=>>], [global]),
 	{_, Opts0} = lists:foldl(fun(Opt, {Pos, Acc}) ->
@@ -73,7 +73,22 @@ match_dep(Arg0, Catalogs, Deps) ->
 	Opts = lists:ukeymerge(1
 		, lists:ukeysort(1, Opts0)
 		, lists:ukeysort(1, ExtraOpts)),
-	{Catalogs, [new_pkg(Name, Opts, Catalogs) | Deps]}.
+	case Name of
+		<<$~, Path/binary>> ->
+			PatchFun = fun(Cfg) ->
+				AbsPath = binary:split(Path, <<"/">>, [global]),
+				Pkg0 = epm:get({dep, AbsPath}, Cfg),
+
+				Pkg = lists:foldl(fun({K, V}, Acc) ->
+					epm_pkg:set(K, V, Acc)
+				end, Pkg0, Opts),
+
+				epm:set({dep, AbsPath}, Pkg, Cfg)
+			end,
+			{Catalogs, Deps, [PatchFun | Callbacks]};
+		_ ->
+			{Catalogs, [new_pkg(Name, Opts, Catalogs) | Deps], Callbacks}
+	end.
 
 %% @private construct a new pkg, possibly using base from pkg found in
 %% catalogs. This does only check with currently known configuration

@@ -29,7 +29,6 @@ EPM was designed to handle dependencies in more controlled way.
 
 #### Parsing
 + Add a `facts` to provide default options like libdir, append_versions (config is always parsed for deps, but facts are only processed for isolate/root pkgs)
-+ Add support for overriding pkg config by their abspath: `tavern/cowboy [version = "0.8.3"]` or `*//cowboy[version = "0.8.3"]` for all cowboy deps
 + Validate if should be in global ETS storage.
 + Add async operations for checkout and friends, build 'action list' returned
   by parse/{0,1} which should define operations required for fixing
@@ -309,3 +308,94 @@ Dependencies (6/22):
   = github.basho:lager=1.2.2 (defined previously)
   = github.eproxus:meck=master (defined previously)
 ```
+
+
+## Configuration
+
+The configuration very straight forward and tries to give you all
+options you may need on just one line of configuration. If the
+short-hand notation is not to your liking you can use a hash map
+directly with a package option.
+
+The syntax is simple, anything not starting with whitespace or a
+lowercase letter is considered a comment and is disregarded by the
+preparser.
+
+There are 2 operations that can be performed on a target: `<-` and
+`<<`, this _defines_ and _appends_ respectively. Currently there are
+only 2 targets: `catalogs` and `dependencies`.
+
+### Using your Github as a catalog
+```epm
+-- Define your github account as the available catalog
+catalogs <-
+	git://github.com/lafka
+
+-- Append Basho's github account with the alias `basho`
+catalogs <<
+	basho <- git://github.com
+```
+
+Now all projects in your or Basho's can be resolved just by a keyword.
+
+### Adding dependencies
+
+_when multiple occurences of same package is found on the same level
+the later will be used._
+
+```epm
+--- There are 3 short hand operators for dependencies:
+--- # -> Use this specific ref (only applicable for pkgs with revision control)
+--- = -> Checkout this specific version
+--- @ -> Reference a catalog which can be searched for the pkg
+---
+--- Additionally a list of k/v options can be given by wrapping them
+--- in brackets.
+---
+--- Gotchas: not all catalogs/agents support fetching a specific
+--- version, this means in some cases (like git) you need to specify
+--- a reference as well to be certain that the correct version is
+--- checkout out
+dependencies <-
+	tavern @github.lafka
+	riakc @basho [
+		pkgname = "riak-erlang-client"
+		version = "1.3.1.1"
+		agent.ref = "1.3.1.1"]
+```
+
+#### Appending values
+
+In some cases it's useful to update some setting in sub-dependencies,
+we can do this by using the `~` operator. We can change tag used for
+`riak_pb` to `1.4.0.3` without changing the `riakc` config:
+
+```epm
+dependencies <<
+	~riakc/riak_pb [agent.ref = "1.4.0.3"]
+```
+
+The above will tell git to checkout the reference to "1.4.0.3"
+
+### Environmental branches
+
+One of my biggest annoyances with Rebar was managing multiple levels
+of dependencies where I had do alot of manual work tagging and pushing
+commits out to make them available for a test run. With branches you
+can put up multiple versions and have 1 configuration for your development
+machine and a different one for Jenkins, the correct one is selected
+by using the `--env <env>` flag:
+
+For instance we might want use a custom build of `protobuffs` for the
+Riak erlang client:
+
+```epm
+dependencies :dev <<
+	~riakc/riak_pb/protobuffs [
+		agent.remote = "~/src/protobuffs"
+		agent.ref = "lafka-test-branch"]
+```
+
+The above will checkout our local copy of protobuffs which shortens
+down the save-compile-test-commit cycle.
+

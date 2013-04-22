@@ -12,24 +12,25 @@ parse(Path, Pkg) ->
 			{ok, Terms} = file:consult(File),
 			parse2(Path, Pkg, Terms);
 		false ->
-			{[], []}
+			{[], [], []}
 	end.
 
 parse2(_Path, Pkg, Terms) ->
 	case lists:keyfind(deps, 1, Terms) of
 		{_,Deps0} ->
-			lists:foldl(fun({_, _, Src} = RawDep, {Ctls, Deps}) ->
+			lists:foldl(fun({_, _, Src} = RawDep, {Ctls, Deps, Callbacks}) ->
 				URL = list_to_binary(erlang:element(2, Src)),
 				case epm_catalog:new(undefined, URL) of
 					{ok, Ctl} ->
 						Dep = parse_dep(RawDep, [epm_catalog:get(name, Ctl)], Pkg),
 						{ [Ctl | Ctls]
-						, [Dep | Deps]};
+						, [Dep | Deps]
+						, Callbacks};
 					false ->
 						Dep = parse_dep(RawDep, [], Pkg),
-						{Ctls, [Dep | Deps]}
+						{Ctls, [Dep | Deps], Callbacks}
 				end
-			end, {[], []}, Deps0);
+			end, {[], [], []}, Deps0);
 		false ->
 			false
 	end.

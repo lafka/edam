@@ -60,7 +60,7 @@ parse(Path) when is_list(Path) ->
 	{ok, Cfg0} = parse(Path, epm_pkg:new(<<"_root">>)),
 	Cfg = lists:foldl(fun(Fun, Acc) ->
 		Fun(Acc)
-	end, Cfg0, Cfg0#cfg.callbacks),
+	end, Cfg0, lists:flatten(Cfg0#cfg.callbacks)),
 	{ok, Cfg}.
 
 -spec parse(file:filename(), epm_pkg:pkg()) -> #cfg{}.
@@ -80,9 +80,9 @@ do_parse([Parser | T], {Path, Pkg, Cfg0} = Acc) ->
 	AutoFetch = env(autofetch),
 
 	case Parser:parse(Path, Pkg) of
-		{Ctls, Deps} ->
+		{Ctls, Deps, Callbacks} ->
 			Cfg1 = set(catalogs, epm_catalog:keymerge(Ctls, get(catalogs, Cfg0)), Cfg0),
-			Cfg2 = merge(Ctls, Deps, Pkg, Cfg1),
+			Cfg2 = merge(Ctls, Deps, Callbacks, Pkg, Cfg1),
 			do_parse(T, {Path, Pkg, Cfg2});
 		false when AutoFetch and (not Exists)->
 			ok = epm_pkg:sync(epm_pkg:set(path, Path, Pkg), Cfg0),
@@ -91,9 +91,9 @@ do_parse([Parser | T], {Path, Pkg, Cfg0} = Acc) ->
 			do_parse(T, Acc)
 	end.
 
-merge(Ctls0, Deps0, Pkg, Cfg0) ->
+merge(Ctls0, Deps0, Callbacks0, Pkg, Cfg0) ->
 	{Ctls1, Deps1, Cfg1} = fold_deps(Ctls0, Deps0, Cfg0),
-	Callbacks = [epm_pkg:get(cfghook, Pkg) | Cfg1#cfg.callbacks],
+	Callbacks = [Callbacks0, epm_pkg:get(cfghook, Pkg) | Cfg1#cfg.callbacks],
 	Deps = Deps1,
 	Cfg0#cfg{
 		  deps = epm_pkg:keymerge(Deps, get(deps, Cfg0))
