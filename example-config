@@ -17,10 +17,22 @@ catalogs <<
 %  Use a specific repo     -> #(dep) @ #(repo identifier)
 %  Specify opts            -> #(dep) [ #(key) = #(val), .. ]
 dependencies <-
-	lager  =2.0.0 @github.basho #2.0.0rc1
-	lager  =1.3.1 @github.basho #1.3.1.1
+	lager  =1.2.2 @github.basho #1.2.2
 	tavern @github.lafka
 	riakc @github.basho [
 		pkgname = "riak-erlang-client"
 		version = "1.3.1.1"
 		agent.ref = "1.3.1.1"]
+
+%% When you need a specific revision since your pull request has not
+%% been merged into master:
+dependencies :stage <<
+	riakc =1.3.1.1 @github.lafka #lafka-issue-97-undefined-key
+
+%% For development you might be interested in using your local repo
+%% instead of a remote without your local branch.
+dependencies :dev <<
+	tavern #0.1.0-SNAPSHOT [agent.remote = "~/src/tavern"]
+	linedancer
+
+

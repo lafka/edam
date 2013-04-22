@@ -3,6 +3,7 @@
 conffile=${1:-"."}
 [ -f "$conffile" ] || conffile="${conffile}/epm.config"
 tmpfile=.cfg-parser
+env=${2:-"default"}
 
 err() {
 	echo $1 >&2
@@ -17,7 +18,7 @@ grep -nP '^[a-z\t]' $conffile > $tmpfile
 targets=$(grep -P '[0-9]+:[a-z].*' $tmpfile | sed -E 's/\s+//g')
 
 for target in $targets; do
-	if ! echo $target | grep -P '[0-9]+:[a-z]+(<<|<-)$' > /dev/null; then
+	if ! echo $target | grep -P '[0-9]+:[a-z]+(?:\:[^<]+)?(<<|<-)$' > /dev/null; then
 		err "error: unknown instruction on line $(echo $target | awk -F: '{print $1}'):"
 		err "       $target"
 		exit 1
@@ -26,10 +27,12 @@ done
 
 sed -nE '
 s/^[^a-z \t].*//;/^$/d;   # remove non-parsable lines
-/\[/ { :r;                # Start loop looking for end ]
-	/\]/!N;
+
+/\[/ { :brackets;         # Start loop looking for end ]
+	/\]/!N;               # Check that there is no ] on this line
 	s/,?\n/,/;s/\[,/[/;   # Concatenate lines and fix commas
-	tr};                  # If ending ] is not found, repeat
+	tbrackets};           # If ending ] is not found, repeat
+
 s/(.)\s+/\1/g; s/^\s+/ /; # Normalize spaces
 p' $conffile
 

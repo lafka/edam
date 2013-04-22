@@ -15,6 +15,10 @@
 	, temp_name/2
 	]).
 
+-export([
+	  escape_filename/1
+	]).
+
 -spec epmpp([file:filename_all()]) -> {ok, Out} | {error, {integer(), Out}}
 	when Out :: string().
 epmpp(Path) when is_binary(Path) ->
@@ -77,3 +81,26 @@ temp_name(Dir, Prefix) -> temp_name(filename:join(Dir, Prefix)).
 temp_name(Stem) ->
 	filename:join(Stem
 		, integer_to_list(crypto:rand_uniform(0, 1 bsl 127))).
+
+%% i know, half assed attempt on stealing edoc_lib's code.....
+escape_filename([C | Cs]) when C == $/; C == $;; C == $\\ ->
+    [escape_byte(C) | escape_filename(Cs)];
+escape_filename([C | Cs]) when C == $@; C == $: ->
+	[escape_byte(C) | escape_filename(Cs)];
+escape_filename([C | Cs]) when C > 16#7f ->
+    %% This assumes that characters are at most 16 bits wide.
+    escape_byte(((C band 16#c0) bsr 6) + 16#c0)
+    ++ escape_byte(C band 16#3f + 16#80)
+    ++ escape_filename(Cs);
+escape_filename([C | Cs]) ->
+    [C | escape_filename(Cs)];
+escape_filename([]) -> [];
+escape_filename(<<Filename/binary>>) ->
+	list_to_binary(escape_filename(binary_to_list(Filename))).
+
+escape_byte(C) ->
+    H = integer_to_list(C, 16),
+    normalize(H).
+
+normalize(H) when length(H) == 1 -> ["0x0" | H];
+normalize(H) -> ["0x" | H].

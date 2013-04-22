@@ -53,7 +53,6 @@ EPM was designed to handle dependencies in more controlled way.
 + Add HTTP agent
 + Add local agent
 + Add gitorious catalog
-+ Add void catalog (1:1 repo mapping) \*\*
 + Add bitbuck catalog
 + Add localfs catalog
 + Add search functionality to github catalog

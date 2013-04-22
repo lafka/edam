@@ -154,7 +154,7 @@ buildpath(Pkg, Cache, _Cfg) ->
 		true ->
 			filename:join([epm:env(cachedir, <<".cache">>)
 				, "dist"
-				, hd(epm_pkg:get(catalog, Pkg))
+				, epm_os:escape_filename(hd(epm_pkg:get(catalog, Pkg)))
 				, epm_pkg:get(name, Pkg)
 				 ]);
 		false ->
