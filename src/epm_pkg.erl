@@ -23,6 +23,7 @@
 	, keymerge/2
 	, mergedeps/2
 	, pathlens/1
+	, pathlens/2
 	]).
 
 %% absname :: the absolute name specifying dependency tree
@@ -94,6 +95,9 @@ get_(pkgname, Pkg) -> Pkg#pkg.pkgname;
 get_(version, Pkg) -> Pkg#pkg.version;
 get_(catalog, Pkg) -> Pkg#pkg.catalog;
 get_(deps, Pkg) -> Pkg#pkg.deps;
+get_({dep, Path}, Pkg) ->
+	{G, _S} = pathlens(Path, pkg),
+	G(Pkg);
 get_(agent, #pkg{agent = {Agent, _}}) -> Agent;
 get_({agent, opts}, #pkg{agent = {_, Opts}}) ->
 	Opts;
@@ -115,6 +119,9 @@ set(pkgname, Val, Pkg) -> Pkg#pkg{pkgname = Val};
 set(version, Val, Pkg) -> Pkg#pkg{version = Val};
 set(catalog, Val, Pkg) -> Pkg#pkg{catalog = Val};
 set(deps, Val, Pkg) -> Pkg#pkg{deps = Val};
+set({dep, Path}, Val, Pkg) ->
+	{_G, S} = pathlens(Path, pkg),
+	S(Val, Pkg);
 set(agent, Val, Pkg) -> Pkg#pkg{agent = {Val, []}};
 set({agent, K}, Val, #pkg{ agent = {B, O}} = Pkg) ->
 	Pkg#pkg{agent = {B, [{K, Val} | O]}};
@@ -190,12 +197,21 @@ mergedeps(#pkg{deps = A}, #pkg{deps = B} = Pkg) ->
                             , Pkg:: pkg()
                             , Cfg :: epm:pkg().
 pathlens(Path) ->
-	[_ | PathL] = lists:foldr(fun(P, Acc) ->
+	pathlens(Path, cfg).
+
+pathlens(Path, Type) ->
+	compose(buildlens(Path, Type)).
+
+buildlens(Path, cfg) ->
+	[access_e(3) | buildlens(Path, list)]; %% 3 = deps in epm:#cfg{}
+buildlens(Path, pkg) ->
+	[access_e(#pkg.deps) | buildlens(Path, list)];
+buildlens(Path, list) ->
+	[_ | Lens] = lists:foldr(fun(P, Acc) ->
 		[access_e(#pkg.deps), access_p(P, #pkg.name) | Acc]
 	end, [], Path),
-	compose([access_e(3) | PathL]). %% 3 = deps in epm:#cfg{}
+	Lens.
 
-%% Lenses with manual focus
 access_e(N) ->
 	{fun(R)    -> element(N, R) end,
 	 fun(A, R) -> setelement(N, R, A) end}.
@@ -241,12 +257,15 @@ pathlens_test() ->
 	Match = [ {A1, [<<"a1">>]}, {B1, [<<"a1">>, <<"b1">>]}
 		, {C1, [<<"a1">>, <<"b1">>, <<"c1">>]}, {A2, [<<"a2">>]}
 		, {B2, [<<"a2">>, <<"b2">>]}],
+	RootPkg = new(<<"root-pkg">>, [{deps, Pkgs}]),
 	lists:foreach(fun({M, P}) ->
-		{G, S} = pathlens(P),
-		Pkg = G(Cfg),
-		?assertEqual(M, G(Cfg)),
+		{CG, CS} = pathlens(P, cfg),
+		{PG, PS} = pathlens(P, pkg),
+		?assertEqual(M, CG(Cfg)),
+		?assertEqual(M, PG(RootPkg)),
 		M2 = set(path, <<"abcd">>, M),
-		?assertEqual(M2, G(S(M2, Cfg)))
+		?assertEqual(M2, CG(CS(M2, Cfg))),
+		?assertEqual(M2, PG(PS(M2, RootPkg)))
 	end, Match).
 
 
