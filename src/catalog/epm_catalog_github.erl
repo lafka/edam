@@ -47,7 +47,7 @@ fetch(Ctl) ->
 	end.
 
 create_pkg(Name, Remote) ->
-	epm_pkg:new(Name, [{{agent, remote}, Remote}]).
+	epm_pkg:new(Name, [template, {{agent, remote}, Remote}]).
 
 append_ctl(User, Ctl0) ->
 	Ctl = case epm_catalog:get(name, Ctl0) of

@@ -66,20 +66,33 @@ new() ->
 new(Opts) ->
 	lists:foldl(fun({K, V}, Cfg) -> set(K, V, Cfg) end, #cfg{}, Opts).
 
--spec parse(binary()) -> {ok, #cfg{}}.
+-spec parse(file:filename_all()) -> {ok, #cfg{}}.
+parse(Path) when is_list(Path) ->
+	parse(list_to_binary(Path));
 parse(Path) when is_binary(Path) ->
 	PkgOpts = [{isolate, Path}],
-	parse(Path, epm_pkg:new(<<"_root">>, PkgOpts)).
+	parse(Path, epm_pkg:new(<<"_root">>, [{absname, []} | PkgOpts])).
 
 -spec parse(binary(), Parent :: epm_pkg:pkg()) -> {ok, #cfg{}}.
 parse(Path, Pkg) ->
-	ok.
+	AbsName = epm_pkg:get(absname, Pkg),
 
+	lists:foreach(fun(Parser) ->
+		Parser:parse(Path, Pkg)
+	end, [epm_parser_conf, epm_parser_rebar]),
+	epm_store:get(AbsName).
 
 -spec get(atom(), cfg()) -> term().
 get(Attrs, Cfg) when is_list(Attrs) ->
 	[get(Attr, Cfg) || Attr <- Attrs];
 get(catalogs, Cfg) -> Cfg#cfg.catalogs;
+get({catalog, Ctl}, Cfg) ->
+	case epm_catalog:select({name, Ctl}, Cfg) of
+		[Catalog] ->
+			Catalog;
+		[] ->
+			false
+	end;
 get(deps, Cfg) -> Cfg#cfg.pkgs;
 get(pkgs, Cfg) -> Cfg#cfg.pkgs;
 get({dep, Path}, Cfg) ->
@@ -91,7 +104,10 @@ get(opts, Cfg) -> Cfg#cfg.opts;
 get(root, Cfg) -> Cfg#cfg.root;
 get(partials, Cfg) -> Cfg#cfg.partials;
 get({partial, AbsName}, Cfg) ->
-	lists:keyfind(AbsName, 1, Cfg#cfg.partials);
+	case lists:keyfind(AbsName, 1, Cfg#cfg.partials) of
+		false -> [];
+		{AbsName, Partial} -> Partial
+	end;
 get({opt, Key}, Cfg) ->
 	case lists:keyfind(Key, 1, Cfg#cfg.opts) of
 		{Key, Val} ->
@@ -104,6 +120,8 @@ get(callbacks, Cfg) ->
 
 -spec set(atom(), Val, cfg()) -> Val when Val :: term().
 set(catalogs, Val, Cfg) -> Cfg#cfg{catalogs = Val};
+set(catalog,  Val, Cfg) ->
+	Cfg#cfg{catalogs = epm_catalog:keymerge([Val], Cfg#cfg.catalogs)};
 set(deps, Val, Cfg) -> Cfg#cfg{pkgs = Val};
 set(pkgs, Val, Cfg) -> Cfg#cfg{pkgs = Val};
 set({dep, AbsName}, Val, Cfg) ->

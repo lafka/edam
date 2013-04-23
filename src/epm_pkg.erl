@@ -10,6 +10,7 @@
 
 -export([
 	  get/2
+	, set/2
 	, set/3
 	]).
 
@@ -45,7 +46,8 @@
 	, synced = false :: true | false | error
 	, path :: file:filename()
 	, cfghook = fun(Cfg) -> Cfg end :: fun((epm:cfg()) -> epm:cfg())
-	, isolate :: false | file:filename_all()
+	, isolate = false :: false | file:filename_all()
+	, template = false :: boolean()
 	}).
 
 -opaque pkg() :: #pkg{}.
@@ -66,10 +68,33 @@ new(Name) ->
 	new(Name, []).
 
 -spec new(binary(), Attrs :: [{pkg_attr(), term()}]) -> #pkg{}.
-new(Name, Attrs) ->
+new(Name, Attrs0) ->
+	BaseAttrs = [{absname, [Name]}, {name, Name}, {pkgname, Name}],
+	Attrs = lists:ukeymerge(1
+		, lists:ukeysort(1, proplists:unfold(Attrs0))
+		, BaseAttrs),
+
+	Isolate  = proplists:get_value(isolate, Attrs),
+	Template = proplists:get_bool(template, Attrs),
+	AbsName  = proplists:get_value(absname, Attrs),
+
+	case Isolate of
+		Root when is_binary(Root) ->
+			epm_store:new(AbsName, [{root, Root}]);
+		_ -> ok
+	end,
+
+	%% @todo 2013-04-23; This is naive, assuming correct config will
+	%% be selected is okey but this will most definitly not work if
+	%% the config is isolated. Oh btw: fetching partials will always
+	%% give you a empty list instead of false
+	Partial =
+		if Template -> [];
+		   true -> epm_store:get(AbsName, {partial, AbsName}) end,
+
 	Pkg = lists:foldl(fun({K, V}, Acc) ->
 		set(K, V, Acc)
-	end, #pkg{name = Name, pkgname = Name, absname = [Name]}, Attrs),
+	end, #pkg{}, Attrs ++ Partial), %% Last write wins so ++ is safe
 	((get(agent, Pkg))):init(Pkg).
 
 -spec fetch(pkg(), epm:cfg()) -> ok | {error, Reason :: term()}.
@@ -95,6 +120,8 @@ get_(absname, Pkg) -> Pkg#pkg.absname;
 get_(pkgname, Pkg) -> Pkg#pkg.pkgname;
 get_(version, Pkg) -> Pkg#pkg.version;
 get_(catalog, Pkg) -> Pkg#pkg.catalog;
+get_(isolate, Pkg) -> Pkg#pkg.isolate;
+get_(template, Pkg) -> Pkg#pkg.template;
 get_(deps, Pkg) -> Pkg#pkg.deps;
 get_({dep, Path}, Pkg) ->
 	{G, _S} = pathlens(Path, pkg),
@@ -113,12 +140,20 @@ get_(synced, Pkg) -> Pkg#pkg.synced;
 get_(path, Pkg) -> Pkg#pkg.path;
 get_(cfghook, Pkg) -> Pkg#pkg.cfghook.
 
--spec set(pkg_attr(), term(), epm:cfg()) -> none().
+-spec set([{pkg_attr(), term()}], pkg()) -> none().
+set(Vals, Pkg) when is_list(Vals) ->
+	lists:foldl(fun({K, V}, Acc) ->
+		set(K, V, Acc)
+	end, Pkg, Vals).
+
+-spec set(pkg_attr(), term(), pkg()) -> none().
 set(name, Val, Pkg) -> Pkg#pkg{name = Val};
 set(absname, Val, Pkg) -> Pkg#pkg{absname = Val};
 set(pkgname, Val, Pkg) -> Pkg#pkg{pkgname = Val};
 set(version, Val, Pkg) -> Pkg#pkg{version = Val};
 set(catalog, Val, Pkg) -> Pkg#pkg{catalog = Val};
+set(isolate, Val, Pkg) -> Pkg#pkg{isolate = Val};
+set(template, Val, Pkg) -> Pkg#pkg{template = Val};
 set(deps, Val, Pkg) -> Pkg#pkg{deps = Val};
 set({dep, Path}, Val, Pkg) ->
 	{_G, S} = pathlens(Path, pkg),

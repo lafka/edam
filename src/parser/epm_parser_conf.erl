@@ -13,52 +13,58 @@ parse(Path, Pkg) ->
 			false
 	end.
 
-parse2(_Path, _Pkg, Tokens) ->
+parse2(_Path, Pkg, Tokens) ->
+	AbsName = epm_pkg:get(absname, Pkg),
 	{Size, CfgEnv} = {size(epm:env(env, <<"default">>)), epm:env(env, <<"default">>)},
-	{_, {Cats, Deps, Cb}} = lists:foldl(fun
-		(<<"catalogs<-">>, {_, {_, Deps, Cb}}) ->
-			{catalog, {[], Deps, Cb}};
-		(<<"catalogs<<">>, {_, Acc}) ->
-			{catalog, Acc};
-		(<<"catalogs:", Env/binary>>, {_, Acc}) ->
-			case Env of
-				<<CfgEnv, "<<">> -> {catalog, Acc};
-				_ -> {skip, Acc}
-			end;
-		(<<"dependencies<-">>, {_, {Catalogs, _, _Cb}}) ->
-			{dep, {Catalogs, [], []}};
-		(<<"dependencies<<">>, {_, Acc}) ->
-			{dep, Acc};
-		(<<"dependencies:", Env/binary>>, {_, Acc}) ->
-			case Env of
-				<<CfgEnv:Size/binary, "<<">> ->
-					{dep, Acc};
-				_ ->
-					{skip, Acc}
-			end;
-		(<<" ", _/binary>>, {skip, Acc}) ->
-			{skip, Acc};
-		(<<" ", Arg/binary>>, {catalog, {Catalogs, Deps, Callbacks}}) ->
-			{catalog, match_catalog(Arg, Catalogs, Deps, Callbacks)};
-		(<<" ", Arg/binary>>, {dep, {Catalogs, Deps, Callbacks}}) ->
-			{dep, match_dep(Arg, Catalogs, Deps, Callbacks)}
-	end, {none, {[], [], []}}, [list_to_binary(X) || X <- Tokens]),
-	{Cats, lists:reverse(Deps), Cb}.
 
-match_catalog(Arg, Catalogs, Deps, Callbacks) ->
+	lists:foldl(fun
+		(<<"catalogs<-">>, _) ->
+			epm_store:set(AbsName, catalogs, []),
+			catalog;
+		(<<"catalogs<<">>, _) -> catalog;
+		(<<"catalogs:", Env/binary>>, _) ->
+			case Env of
+				<<CfgEnv, "<<">> -> catalog;
+				_ -> skip
+			end;
+		(<<"dependencies<-">>, _) ->
+			epm_store:set(AbsName, pkgs, []),
+			dep;
+		(<<"dependencies<<">>, _) -> dep;
+		(<<"dependencies:", Env/binary>>, _) ->
+			case Env of
+				<<CfgEnv:Size/binary, "<<">> -> dep;
+				_ -> skip
+			end;
+		(<<" ", _/binary>>, skip) -> skip;
+		(<<" ", Arg/binary>>, catalog) ->
+			parse_catalog(Arg, AbsName),
+			catalog;
+		(<<" ", Arg/binary>>, dep) ->
+			parse_dep(Arg, AbsName),
+			dep
+	end, none, [list_to_binary(X) || X <- Tokens]),
+
+	epm_store:get(AbsName).
+
+parse_catalog(Arg, AbsName) ->
 	{Alias, URL} = case binary:split(Arg, <<"<-">>) of
 		[A, U] -> {A, U};
 		[U] -> {undefined, U} end,
+
 	case epm_catalog:new(Alias, URL) of
 		{ok, Catalog} ->
-			{[Catalog | Catalogs], Deps, Callbacks};
+			%% catalogs is pr. config so using paths makes no sense
+			epm_store:set(AbsName, catalog, Catalog);
 		false ->
-			{Catalogs, Deps, Callbacks}
-	end.
+			ok
+	end,
+	ok.
 
-match_dep(Arg0, Catalogs, Deps, Callbacks) ->
+parse_dep(Arg0, AbsName) ->
 	{Arg, ExtraOpts} = parse_opts(Arg0),
 	[Name|Attrs] = binary:split(Arg, [<<$#>>, <<$@>>, <<$=>>], [global]),
+
 	{_, Opts0} = lists:foldl(fun(Opt, {Pos, Acc}) ->
 		NewPos = Pos + size(Opt) + 1,
 		case binary:part(Arg, {Pos, 1}) of
@@ -70,38 +76,38 @@ match_dep(Arg0, Catalogs, Deps, Callbacks) ->
 				{NewPos, [{version, Opt} | Acc]}
 		end
 	end, {size(Name), []}, Attrs),
+
+	AbsOpt = {absname, AbsName ++ [Name]},
 	Opts = lists:ukeymerge(1
-		, lists:ukeysort(1, Opts0)
+		, [AbsOpt | lists:ukeysort(1, Opts0)]
 		, lists:ukeysort(1, ExtraOpts)),
-	case Name of
-		<<$~, Path/binary>> ->
-			PatchFun = fun(Cfg) ->
-				AbsPath = binary:split(Path, <<"/">>, [global]),
-				Pkg0 = epm:get({dep, AbsPath}, Cfg),
 
-				Pkg = lists:foldl(fun({K, V}, Acc) ->
-					epm_pkg:set(K, V, Acc)
-				end, Pkg0, Opts),
+	merge_pkg(AbsName, Name, Opts).
 
-				epm:set({dep, AbsPath}, Pkg, Cfg)
-			end,
-			{Catalogs, Deps, [PatchFun | Callbacks]};
-		_ ->
-			{Catalogs, [new_pkg(Name, Opts, Catalogs) | Deps], Callbacks}
-	end.
+merge_pkg(AbsName, <<$~, Path/binary>>, Opts) ->
+	%% @todo 2013-04-23: start PkgPath might overlap with AbsName
+	PkgPath = binary:split(Path, <<$/>>, [global]),
 
-%% @private construct a new pkg, possibly using base from pkg found in
-%% catalogs. This does only check with currently known configuration
-new_pkg(Name, Opts, Catalogs) ->
-	case epm_catalog:select({pkg, Name}, Catalogs) of
+	%% If Pkg is found we only need to merge options,
+	%% otherwise add a partial pkg that will be appended later
+	case epm_store:get(AbsName, {pkg, PkgPath}) of
+		false ->
+			epm_store:set(AbsName, {partial, PkgPath}, Opts);
+		Pkg ->
+			epm_store:set(AbsName, {pkg, PkgPath}, epm_pkg:set(Opts, Pkg))
+	end;
+merge_pkg(AbsName, Name, Opts) ->
+	Catalogs = epm_store:get(AbsName, catalogs),
+	Pkg = case epm_catalog:select({pkg, Name}, Catalogs) of
 		[] ->
 			epm_pkg:new(Name, Opts);
 		[Ctl|_] ->
-			[Pkg] = epm_catalog:get({pkg, Name}, Ctl),
+			[Pkg0] = epm_catalog:get({pkg, Name}, Ctl),
 			lists:foldl(fun({K, V}, Acc) ->
 				epm_pkg:set(K, V, Acc) end
-			, Pkg, Opts)
-	end.
+			, Pkg0, Opts)
+	end,
+	epm_store:set(AbsName, {pkg, epm_pkg:get(absname, Pkg)}, Pkg).
 
 parse_opts(Args) ->
 	case binary:split(Args, [<<$[>>, <<$]>>], [global]) of
