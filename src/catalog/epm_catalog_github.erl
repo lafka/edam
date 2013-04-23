@@ -36,7 +36,7 @@ fetch(Ctl) ->
 			Pkgs0 = load_cache(Ctl2, fun(NestedCtl) ->
 				lookup_repos(NestedCtl, [])
 			end),
-			Pkgs = [create_pkg(N, R) || {N, R} <- Pkgs0],
+			Pkgs = [create_pkg(N, R, Ctl2) || {N, R} <- Pkgs0],
 			{ok, epm_catalog:set(pkgs, Pkgs, Ctl2)};
 		Err ->
 			Name = epm_catalog:get(name, Ctl),
@@ -46,8 +46,10 @@ fetch(Ctl) ->
 			false
 	end.
 
-create_pkg(Name, Remote) ->
-	epm_pkg:new(Name, [template, {{agent, remote}, Remote}]).
+create_pkg(Name, Remote, Ctl) ->
+	CtName = epm_catalog:get(name, Ctl),
+	epm_pkg:new(Name
+		, [template, {catalog, [CtName]}, {{agent, remote}, Remote}]).
 
 append_ctl(User, Ctl0) ->
 	Ctl = case epm_catalog:get(name, Ctl0) of
