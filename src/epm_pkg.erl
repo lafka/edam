@@ -45,6 +45,7 @@
 	, synced = false :: true | false | error
 	, path :: file:filename()
 	, cfghook = fun(Cfg) -> Cfg end :: fun((epm:cfg()) -> epm:cfg())
+	, isolate :: false | file:filename_all()
 	}).
 
 -opaque pkg() :: #pkg{}.

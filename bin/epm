@@ -19,7 +19,9 @@ main(Args) ->
                     , Opts),
                 Cmd = lists:reverse(Cmd0),
                 epm:log(debug, "args: ~p, cmd: ~p, inner: ~p", [Args, Cmd, Opts2]),
-                target(Cmd, Opts2);
+                {ok, _} = epm_store:start_link(),
+                target(Cmd, Opts2),
+                ok = gen_server:call(epm_store, stop);
             error ->
                 ok
         end

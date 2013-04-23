@@ -29,7 +29,6 @@ EPM was designed to handle dependencies in more controlled way.
 
 #### Parsing
 + Add a `facts` to provide default options like libdir, append_versions (config is always parsed for deps, but facts are only processed for isolate/root pkgs)
-+ Validate if should be in global ETS storage.
 + Add async operations for checkout and friends, build 'action list' returned
   by parse/{0,1} which should define operations required for fixing
   consistency errors before main operation can process (<- think twice)
