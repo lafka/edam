@@ -105,7 +105,7 @@ merge_pkg(AbsName, Name, Opts) ->
 			[Pkg0] = epm_catalog:get({pkg, Name}, Ctl),
 			lists:foldl(fun({K, V}, Acc) ->
 				epm_pkg:set(K, V, Acc) end
-			, Pkg0, Opts)
+			, Pkg0, [{template, false} | Opts])
 	end,
 	epm_store:set(AbsName, {pkg, epm_pkg:get(absname, Pkg)}, Pkg).
 
