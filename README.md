@@ -17,8 +17,6 @@ EPM was designed to handle dependencies in more controlled way.
 
 ## Features coming to you soon:
 
-+ Variations of dependencies based on env, allows for using package
-  different versions during development/testing/prod/etc
 + Compiles to single binary without requirement for erlang (maybe?)
 + Release signing / key trust for packages
 + Isolated checkout, dependency will checkout required deps on it's
@@ -35,7 +33,6 @@ EPM was designed to handle dependencies in more controlled way.
 
 #### Checkout
 + Make libdir/append_versions pkg specific (in config).
-+ Add isolate option to build pr.pkg local depedency tree \*\*
 + Fix automatic catalog selection AND catalog priority
 + Make cached version of git use mirror to forward remote branches \*\*
 
@@ -113,10 +110,10 @@ A parser must export the following functions:
 
 ```
 parse/2 :: (file:filename(), epm_pkg:pkg()) ->
-	{[epm_catalog:catalog()], [epm_pkg:pkg()]} | false
-Parses the configuration for a file, returns the catalogs/pkgs found
-or false if a error occured (if a path is not valid for that config,
-it's not considered an error and should return `{[], []}`.
+	{ok, Cfg} | false {error, Reason :: term()}
+Parses the configuration for a file, returns {ok, AbsName} if
+configuration was updated, false if parser did nothing or a tuple
+{error, Err :: term()} when there was an error.
 ```
 
 ## Agents

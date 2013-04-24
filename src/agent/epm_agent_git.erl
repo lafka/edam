@@ -12,34 +12,22 @@ name() ->
 	<<"git">>.
 
 init(Pkg0) ->
-	AbsName = lists:reverse(epm_pkg:get(absname, Pkg0)),
+	%% The template check is in place to make sure we don't try to add
+	%% templates as dependencies
+	case epm_pkg:get(template, Pkg0) of
+		true ->
+			Pkg0;
+		false ->
+			[_Name, AbsName] = epm_pkg:get([name, absname], Pkg0),
+			epm:log(debug, "agent:git: init ~p", [AbsName]),
 
-	%% Set the state of codepath, this is called as last step in epm:parse()
-	epm_pkg:set(cfghook
-	, fun(Cfg) ->
-		Pkg1 = epm:get({dep, AbsName}, Cfg),
-		Pkg = case epm_pkg:get({agent, ref}, Pkg1) of
-			undefined -> epm_pkg:set({agent, ref}, any, Pkg1);
-			_ -> Pkg1 end,
+			{ok, Cfg} = epm_store:get(AbsName),
+			CodePath = buildpath(Pkg0, false, Cfg),
+			Pkg = epm_pkg:set(path, CodePath, Pkg0),
+			epm_store:set(AbsName, {pkg, AbsName}, Pkg),
+			Pkg
+	end.
 
-		Synced = case status(Pkg, Cfg) of
-			ok ->
-				true;
-			missing ->
-				epm:log(info, "agent:git: ~s:~s=~s not checked out"
-					, epm_pkg:get([catalog, name, version], Pkg)),
-				false;
-			stale ->
-				epm:log(info, "agent:git: ~s:~s=~s requires updated"
-					, epm_pkg:get([catalog, name, version], Pkg)),
-				false;
-			{error, _} ->
-				error end,
-
-		NewPkg = epm_pkg:set(synced, Synced, Pkg),
-		epm:set({dep, AbsName}, NewPkg, Cfg)
-	  end
-	, Pkg0).
 
 -spec fetch(epm_pkg:pkg(), epm:cfg()) -> ok | {error, Reason :: term()}.
 fetch(Pkg, Cfg) ->
@@ -84,7 +72,9 @@ fetch_pkg(Pkg, Catalog, Cfg) ->
 
 	CodePath = buildpath(Pkg, false, Cfg),
 
-	Ref = epm_pkg:get({agent, ref}, Pkg),
+	Ref = case epm_pkg:get({agent, ref}, Pkg) of
+		undefined -> "master";
+		Ref0 -> Ref0 end,
 
 	case filelib:is_dir(CodePath) of
 		true ->

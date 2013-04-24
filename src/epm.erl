@@ -70,16 +70,32 @@ new(Opts) ->
 parse(Path) when is_list(Path) ->
 	parse(list_to_binary(Path));
 parse(Path) when is_binary(Path) ->
-	PkgOpts = [{isolate, Path}],
-	parse(Path, epm_pkg:new(<<"_root">>, [{absname, []} | PkgOpts])).
+	RootName = list_to_binary(filename:basename(filename:absname("./"))),
+	PkgOpts = [{isolate, Path}, {agent, epm_agent_void}],
+	parse(Path, epm_pkg:new(RootName, PkgOpts)).
 
 -spec parse(binary(), Parent :: epm_pkg:pkg()) -> {ok, #cfg{}}.
 parse(Path, Pkg) ->
 	AbsName = epm_pkg:get(absname, Pkg),
 
+	AutoFetch = env(autofetch),
+	Exists = filelib:is_dir(Path),
+
+	if
+		not Exists and AutoFetch->
+			{ok, Cfg} = epm_store:get(AbsName),
+			epm_pkg:sync(Pkg, Cfg);
+		true -> ok end,
+
 	lists:foreach(fun(Parser) ->
 		Parser:parse(Path, Pkg)
 	end, [epm_parser_conf, epm_parser_rebar]),
+
+	Pkg1 = epm_store:get(AbsName, {pkg, epm_pkg:get(absname, Pkg)}),
+	epm_pkg:foreach(fun(Dep) ->
+		parse(epm_pkg:get(path, Dep), Dep)
+	end, Pkg1),
+
 	epm_store:get(AbsName).
 
 -spec get(atom(), cfg()) -> term().
@@ -126,6 +142,8 @@ set(deps, Val, Cfg) -> Cfg#cfg{pkgs = Val};
 set(pkgs, Val, Cfg) -> Cfg#cfg{pkgs = Val};
 set({dep, AbsName}, Val, Cfg) ->
 	set({pkg, AbsName}, Val, Cfg);
+set({pkg, [_Name]}, Val, Cfg) ->
+	set(pkgs, epm_pkg:keymerge([Val], Cfg#cfg.pkgs), Cfg);
 set({pkg, AbsName}, Val, Cfg) ->
 	{_G, S} = epm_pkg:pathlens(AbsName),
 	S(Val, Cfg);

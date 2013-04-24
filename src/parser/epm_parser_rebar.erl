@@ -12,46 +12,46 @@ parse(Path, Pkg) ->
 			{ok, Terms} = file:consult(File),
 			parse2(Path, Pkg, Terms);
 		false ->
-			{[], [], []}
+			false
 	end.
 
 parse2(_Path, Pkg, Terms) ->
 	case lists:keyfind(deps, 1, Terms) of
 		{_,Deps0} ->
-			lists:foldl(fun({_, _, Src} = RawDep, {Ctls, Deps, Callbacks}) ->
+			lists:foreach(fun({_, _, Src} = RawDep) ->
 				URL = list_to_binary(erlang:element(2, Src)),
-				case epm_catalog:new(undefined, URL) of
-					{ok, Ctl} ->
-						Dep = parse_dep(RawDep, [epm_catalog:get(name, Ctl)], Pkg),
-						{ [Ctl | Ctls]
-						, [Dep | Deps]
-						, Callbacks};
-					false ->
-						Dep = parse_dep(RawDep, [], Pkg),
-						{Ctls, [Dep | Deps], Callbacks}
-				end
-			end, {[], [], []}, Deps0);
+
+				parse_catalog(URL, Pkg),
+				merge_dep(RawDep, Pkg)
+			end, Deps0);
 		false ->
 			false
 	end.
 
-parse_dep({Name, ".*", Src}, Ctl, Parent) ->
-	parse_dep({Name, any, Src}, Ctl, Parent);
-parse_dep({Name, _Vsn, Src}, Ctl, Parent) ->
+parse_catalog(Resource, Pkg) ->
+	case epm_catalog:new(undefined, Resource) of
+		{ok, Catalog} ->
+			epm_store:set(epm_pkg:get(absname, Pkg), catalog, Catalog);
+		false ->
+			ok
+	end.
+
+merge_dep({Name, ".*", Src}, Pkg) ->
+	merge_dep({Name, any, Src}, Pkg);
+merge_dep({Name, _Vsn, Src}, Pkg) ->
 	{Remote, Ref} = case Src of
 		{git, Rem, {branch, Branch}} -> {Rem, Branch};
 		{git, Rem, {tag, Tag}} -> {Rem, Tag};
 		{git, Rem, Ref0} -> {Rem, Ref0};
 		{git, Rem} -> {Rem, "master"};
-		_ -> exit(badarg, [Name, _Vsn, Src]) end,
+		_ -> error(unsupported_agent, [{Name, _Vsn, Src}, Pkg]) end,
 
 	Version = case Ref of any -> any; Ref -> list_to_bin(Ref) end,
 	BinName = atom_to_binary(Name, unicode),
 
 	epm_pkg:new(BinName, [
-		  {absname, [BinName | epm_pkg:get(absname, Parent)]}
+		  {absname, epm_pkg:get(absname, Pkg) ++ [Name]}
 		, {version, Version}
-		, {catalog, Ctl}
 		, {{agent, ref}, Ref}
 		, {{agent, remote}, list_to_binary(Remote)}
 		]).

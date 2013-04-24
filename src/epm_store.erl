@@ -20,6 +20,7 @@
 	  new/2
 	, get/1
 	, get/2
+	, list/0
 	, set/3
 	]).
 
@@ -39,6 +40,9 @@ get(AbsName) ->
 get(AbsName, Opt) ->
 	{ok, Cfg} = gen_server:call(?MODULE, {config, {get, AbsName}}),
 	epm:get(Opt, Cfg).
+
+list() ->
+	gen_server:call(?MODULE, {config, list}).
 
 set(AbsName, Opt, Val) ->
 	Tuple = [{Opt, Val}],
@@ -69,7 +73,6 @@ handle_call({config, {new, AbsName, Opts}}, _From, State) ->
 					{reply, Reply, State};
 				false ->
 					{ok, NewState} = save({config, AbsName}, Cfg, State),
-					epm:log(debug, "created new config ~p", [AbsName]),
 					{reply, {ok, Cfg}, NewState}
 			end;
 		false ->
@@ -108,11 +111,17 @@ code_change(_OldVsn, State, _Extra) ->
 exists({config, AbsName}, #state{configs = Cfgs}) ->
 	lists:keymember(AbsName, 1, Cfgs).
 
-find({config, AbsName}, #state{configs = Cfgs} = State) ->
+find({config, AbsName}, State) ->
+	find({config, AbsName}, AbsName, State).
+
+find({config, AbsName}, Orig, #state{configs = Cfgs} = State) ->
 	case lists:keyfind(AbsName, 1, Cfgs) of
-		false ->
+		false when length(AbsName) > 0 ->
 			NewName = lists:sublist(AbsName, length(AbsName) - 1),
 			find({config, NewName}, State);
+		false ->
+			Configs = [{configs, [X || {X, _} <- Cfgs]}],
+			error(no_config, [{absname, Orig}, Configs]);
 		{AbsName, Cfg} ->
 			{ok, Cfg}
 	end.

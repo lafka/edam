@@ -100,13 +100,20 @@ merge_pkg(AbsName, Name, Opts) ->
 	Catalogs = epm_store:get(AbsName, catalogs),
 	Pkg = case epm_catalog:select({pkg, Name}, Catalogs) of
 		[] ->
+			epm:log(debug, "parser:epm: creating pkg ~p", [Name]),
 			epm_pkg:new(Name, Opts);
 		[Ctl|_] ->
+			epm:log(debug, "parser:epm: picking ~p from ~p"
+				, [Name, epm_catalog:get(name, Ctl)]),
 			[Pkg0] = epm_catalog:get({pkg, Name}, Ctl),
-			lists:foldl(fun({K, V}, Acc) ->
+
+			Pkg1 = lists:foldl(fun({K, V}, Acc) ->
 				epm_pkg:set(K, V, Acc) end
-			, Pkg0, [{template, false} | Opts])
+			, Pkg0, [{template, false} | Opts]),
+
+			((epm_pkg:get(agent, Pkg1))):init(Pkg1)
 	end,
+
 	epm_store:set(AbsName, {pkg, epm_pkg:get(absname, Pkg)}, Pkg).
 
 parse_opts(Args) ->

@@ -45,7 +45,6 @@
 	, agent = {epm_agent_git, []} :: {epm:agent(), AgentOpts :: [term()]}
 	, synced = false :: true | false | error
 	, path :: file:filename()
-	, cfghook = fun(Cfg) -> Cfg end :: fun((epm:cfg()) -> epm:cfg())
 	, isolate = false :: false | file:filename_all()
 	, template = false :: boolean()
 	}).
@@ -62,8 +61,6 @@
 -export_type([pkg/0]).
 
 -spec new(binary()) -> #pkg{}.
-new(<<"_root">>) ->
-	#pkg{name = <<"_root">>};
 new(Name) ->
 	new(Name, []).
 
@@ -74,28 +71,57 @@ new(Name, Attrs0) ->
 		, lists:ukeysort(1, proplists:unfold(Attrs0))
 		, BaseAttrs),
 
-	Isolate  = proplists:get_value(isolate, Attrs),
-	Template = proplists:get_bool(template, Attrs),
 	AbsName  = proplists:get_value(absname, Attrs),
 
-	case Isolate of
+	case proplists:get_value(isolate, Attrs) of
 		Root when is_binary(Root) ->
+			epm:log(debug, "epm:pkg: creating new config for ~p, in ~p"
+				, [AbsName, Root]),
 			epm_store:new(AbsName, [{root, Root}]);
 		_ -> ok
 	end,
 
+	Pkg = lists:foldl(fun({K, V}, Acc) ->
+		set(K, V, Acc)
+	end, #pkg{}, Attrs),
+	persist_pkg_cfg(AbsName, Pkg).
+
+persist_pkg_cfg(_AbsName, #pkg{template = true} = Pkg) ->
+	Pkg;
+persist_pkg_cfg(AbsName, Pkg0) ->
 	%% @todo 2013-04-23; This is naive, assuming correct config will
 	%% be selected is okey but this will most definitly not work if
 	%% the config is isolated. Oh btw: fetching partials will always
 	%% give you a empty list instead of false
 	Partial =
-		if Template -> [];
+		if Pkg0#pkg.template -> [];
 		   true -> epm_store:get(AbsName, {partial, AbsName}) end,
 
-	Pkg = lists:foldl(fun({K, V}, Acc) ->
+	Pkg1 = lists:foldl(fun({K, V}, Acc) ->
 		set(K, V, Acc)
-	end, #pkg{}, Attrs ++ Partial), %% Last write wins so ++ is safe
-	((get(agent, Pkg))):init(Pkg).
+	end, Pkg0, Partial),
+
+	Pkg2 = maybe_add_catalog(AbsName, Pkg1),
+	Pkg3 = ((get(agent, Pkg2))):init(Pkg2),
+
+	epm_store:set(AbsName, {pkg, AbsName}, Pkg3),
+
+	Pkg3.
+
+
+%% @private autoselect channels if available
+maybe_add_catalog(_AbsName, #pkg{catalog = [_ | _]} = Pkg) ->
+	Pkg;
+maybe_add_catalog(_AbsName, #pkg{template = true} = Pkg) ->
+	Pkg;
+maybe_add_catalog(AbsName, Pkg) ->
+	Ctls0 = epm_catalog:select({pkg, epm_pkg:get(name, Pkg)}
+		, epm_store:get(AbsName, catalogs)),
+
+	Ctls = epm_catalog:map(fun(Ctl) -> epm_catalog:get(name, Ctl) end, Ctls0),
+
+	epm_pkg:set(catalog, Ctls, Pkg).
+
 
 -spec fetch(pkg(), epm:cfg()) -> ok | {error, Reason :: term()}.
 fetch(#pkg{agent = {Agent,_}} = Pkg, Cfg) ->
@@ -137,8 +163,7 @@ get_({agent, Opt}, #pkg{agent = {_, Opts}}) ->
 			undefined
 	end;
 get_(synced, Pkg) -> Pkg#pkg.synced;
-get_(path, Pkg) -> Pkg#pkg.path;
-get_(cfghook, Pkg) -> Pkg#pkg.cfghook.
+get_(path, Pkg) -> Pkg#pkg.path.
 
 -spec set([{pkg_attr(), term()}], pkg()) -> none().
 set(Vals, Pkg) when is_list(Vals) ->
@@ -162,8 +187,7 @@ set(agent, Val, Pkg) -> Pkg#pkg{agent = {Val, []}};
 set({agent, K}, Val, #pkg{ agent = {B, O}} = Pkg) ->
 	Pkg#pkg{agent = {B, [{K, Val} | O]}};
 set(synced, Val, Pkg) -> Pkg#pkg{synced = Val};
-set(path, Val, Pkg) -> Pkg#pkg{path = Val};
-set(cfghook, Val, Pkg) -> Pkg#pkg{cfghook = Val}.
+set(path, Val, Pkg) -> Pkg#pkg{path = Val}.
 
 -spec select({atom(), binary()}, traversable()) -> [pkg()].
 select(Selector, Cfg) when is_tuple(Cfg) ->
