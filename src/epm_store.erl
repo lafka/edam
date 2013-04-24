@@ -113,7 +113,13 @@ handle_call({config, {set, AbsName, Opts}}, _From, State) ->
 				{ok, NewState} = save({config, CfgAbsName}, Cfg, State),
 				{reply, {ok, Cfg}, NewState}
 			catch
-				C:R  -> {reply, {error, {C, R}}, State}
+				Class:Reason  ->
+					Trace = erlang:get_stacktrace(),
+					epm:log(error, "store:set:  failed to update: ~p"
+						, [filename:join(CfgAbsName)]),
+					epm:log(error, "~s",
+						[format_exception(Class, Reason, Trace, 25)]),
+					{reply, {error, {Class, Reason}}, State}
 			end;
 		Err ->
 			{reply, Err, State}
@@ -133,6 +139,16 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
+
+format_exception(Class, Reason, Trace, Indent) ->
+	Str = lists:flatten(eunit_lib:format_exception({Class, Reason, Trace})),
+	Pad = string:chars($ , Indent),
+	Lines = lists:map(
+		fun(Line) -> [Pad | Line] ++ "\n" end
+	, string:tokens(Str, "\n")),
+	{TraceStr, [[_|Err]]} = lists:split(length(Lines) - 1, Lines),
+	io_lib:format("Caught exception: ~s~n~s",
+		[Err, TraceStr]).
 
 %% @private fix overlapping pkg/absname
 reduce_absname(AbsName, {pkg, Opt}) ->
