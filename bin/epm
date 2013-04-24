@@ -238,15 +238,18 @@ printer(Path, [], Opts) ->
     Fmt = proplists:get_value(format, Opts
         , "%t= %=name=%=version (%=agent.ref#%=agent.remote)"),
 
-    epm:log(debug, "opts: ~p", [Opts]),
-
     lists:foreach(fun(AbsName) ->
-        io:format(":: Config (~s)~n", [filename:join(AbsName)]),
+        io:format("~n:: Config (~s)~n", [filename:join(AbsName)]),
 
         {ok, Cfg} = epm_store:get(AbsName),
 
         Deps = epm:get(pkgs, Cfg),
-        lists:foreach(fun(Dep) -> print_pkg(Fmt, Dep) end, Deps)
+        case Deps of
+            [] ->
+                io:format("   No packages found in config~n");
+            Deps ->
+                lists:foreach(fun(Dep) -> print_pkg(Fmt, Dep) end, Deps)
+        end
     end, Cfgs).
 
 print_pkg(Fmt0, Pkg) ->
