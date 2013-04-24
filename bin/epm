@@ -11,6 +11,7 @@ main(Args) ->
     try
         Dir = get_codepath(escript:script_name()),
         true = code:add_path(filename:join([Dir, "ebin"])),
+        epm:set_env(log_level, notice),
         epm:init([{basedir, Dir}]),
         case parse_args(Args, []) of
             {ok, Opts} ->
@@ -147,21 +148,35 @@ target(["deps", "sync"], Opts) ->
     target(["deps", "sync", "."], Opts);
 
 target(["deps", "sync", Path], _Opts0) ->
-    {ok, Cfg} = epm:parse(Path),
-    epm:log(debug, "syncing ~b packages", [length(epm:get(deps, Cfg))]),
-    Fetch = fun(Pkg, Fun) ->
-        epm_pkg:foreach(fun(Dep) ->
-            case epm_pkg:sync(Dep, Cfg) of
-                ok -> ok;
-                {error, Err} ->
-                    epm:log(error, "sync: ~s:~s=~s, ~p"
-                        , epm_pkg:get([catalog, name, version], Pkg)
-                            ++ Err)
-            end,
-            Fun(Dep, Fun) end,
-        Pkg)
+    {ok, _} = epm:parse(Path),
+    {ok, Cfgs} = epm_store:list(),
+
+    epm:log(debug, "configs: ~p", [Cfgs]),
+
+    SyncPkgs = fun(Pkg, Continuation) ->
+        case length(epm_pkg:get(deps, Pkg)) of
+            0 -> ok;
+            Length ->
+                epm:log(notice, "Syncing ~b package(s) in config ~s"
+                    , [Length , filename:join(epm_pkg:get(absname, Pkg))]),
+                epm_pkg:foreach(fun(Dep) -> Continuation(Dep, Continuation) end, Pkg)
+        end
     end,
-    epm_pkg:foreach(fun(Pkg) -> Fetch(Pkg, Fetch) end, Cfg);
+
+    lists:foreach(fun(AbsName) ->
+        epm:log(info, "syncing: ~s", [filename:join(AbsName)]),
+
+        {ok, Cfg} = epm_store:get(AbsName),
+
+        Deps = epm:get(pkgs, Cfg),
+        case Deps of
+            [] ->
+                epm:log(notice, "No packages found in config ~s"
+                    , [filename:join(AbsName)]);
+            Deps ->
+                lists:foreach(fun(Dep) -> SyncPkgs(Dep, SyncPkgs) end, Deps)
+        end
+    end, Cfgs);
 
 target(["deps", "check"], Opts) ->
     target(["deps", "check", "."], Opts);
