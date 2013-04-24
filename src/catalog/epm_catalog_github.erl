@@ -106,7 +106,8 @@ get_repo_name(<<"git://github.com/", Tail/binary>>) ->
 req(URL) ->
 	maybe_start_inets(),
 	epm:log(debug, "req: ~s", [URL]),
-	httpc:request(URL).
+	Headers = [{"User-Agent", "EPM HTTPC - http://github.com/lafka/epm"}],
+	httpc:request(get, {URL, Headers}, [], []).
 
 maybe_start_inets() ->
 	lists:keymember(inets, 1, application:which_applications()) orelse
