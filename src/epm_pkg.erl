@@ -75,7 +75,7 @@ new(Name, Attrs0) ->
 
 	case proplists:get_value(isolate, Attrs) of
 		Root when is_binary(Root) ->
-			epm:log(debug, "epm:pkg: creating new config for ~p, in ~p"
+			epm:log(notice, "epm:pkg: creating isolated config for ~p, in ~p"
 				, [AbsName, Root]),
 			epm_store:new(AbsName, [{root, Root}]);
 		_ -> ok
