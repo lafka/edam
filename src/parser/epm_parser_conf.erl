@@ -89,11 +89,12 @@ merge_pkg(AbsName, <<$~, Path/binary>>, Opts) ->
 	PkgPath = binary:split(Path, <<$/>>, [global]),
 
 	%% If Pkg is found we only need to merge options,
-	%% otherwise add a partial pkg that will be appended later
+	%% otherwise add a partial pkg that will be appended later and
+	%% @todo 2013-04-24; epm_store wraps an {ok, _} around response from epm:get
 	case epm_store:get(AbsName, {pkg, PkgPath}) of
-		false ->
+		{ok, false} ->
 			epm_store:set(AbsName, {partial, PkgPath}, Opts);
-		Pkg ->
+		{ok, Pkg} ->
 			epm_store:set(AbsName, {pkg, PkgPath}, epm_pkg:set(Opts, Pkg))
 	end;
 merge_pkg(AbsName, Name, Opts) ->
