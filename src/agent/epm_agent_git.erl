@@ -23,9 +23,7 @@ init(Pkg0) ->
 
 			{ok, Cfg} = epm_store:get(AbsName),
 			CodePath = buildpath(Pkg0, false, Cfg),
-			Pkg = epm_pkg:set(path, CodePath, Pkg0),
-			epm_store:set(AbsName, {pkg, AbsName}, Pkg),
-			Pkg
+			epm_pkg:set(path, CodePath, Pkg0)
 	end.
 
 
