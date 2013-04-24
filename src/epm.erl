@@ -91,12 +91,18 @@ parse(Path, Pkg) ->
 		Parser:parse(Path, Pkg)
 	end, [epm_parser_conf, epm_parser_rebar]),
 
-	{ok, Pkg1} = epm_store:get(AbsName, {pkg, epm_pkg:get(absname, Pkg)}),
-	epm_pkg:foreach(fun(Dep) ->
-		parse(epm_pkg:get(path, Dep), Dep)
-	end, Pkg1),
+	case epm_store:get(AbsName, {pkg, AbsName}) of
+		{ok, false} ->
+			epm:log(warning, "parse: ~s did not return any config"
+				, [filename:join(AbsName)]),
+		false;
+		{ok, Pkg1} ->
+			epm_pkg:foreach(fun(Dep) ->
+				parse(epm_pkg:get(path, Dep), Dep)
+			end, Pkg1),
 
-	{ok, _} = epm_store:get(AbsName).
+			{ok, _} = epm_store:get(AbsName)
+	end.
 
 -spec get(atom(), cfg()) -> term().
 get(Attrs, Cfg) when is_list(Attrs) ->
