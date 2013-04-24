@@ -92,6 +92,13 @@ merge_pkg(AbsName, <<$~, Path/binary>>, Opts) ->
 	%% otherwise add a partial pkg that will be appended later and
 	%% @todo 2013-04-24; epm_store wraps an {ok, _} around response from epm:get
 	case epm_store:get(AbsName, {pkg, PkgPath}) of
+		{error, {badarg, _}} ->
+			{ok, Cfgs} = epm_store:list(),
+			epm:log(error
+				, "parser:epm: invalid config state, path ~p not found "
+				  "in any configs (~p)."
+				, [filename:join(AbsName), Cfgs]),
+			ok;
 		{ok, false} ->
 			epm_store:set(AbsName, {partial, PkgPath}, Opts);
 		{ok, Pkg} ->
@@ -122,8 +129,10 @@ parse_opts(Args) ->
 		[Attrs, Opts0, <<>>] ->
 			Opts = parse_opts(binary:split(Opts0, <<$,>>, [global]), []),
 			{Attrs, Opts};
-		[_, _Opts] ->
-			error({parser, expectation, [']', void]});
+		[_Attrs, _Opts] ->
+			epm:log(error, "parser:epm: missing map token(s) '[]' in ~s" , [Args]),
+
+			error({parser, missing_token, ['[', ']']});
 		[Attrs] ->
 			{Attrs, []}
 	end.

@@ -35,12 +35,41 @@ new(AbsName, Opts) ->
 	gen_server:call(?MODULE, {config, {new, AbsName, Opts}}).
 
 get(AbsName) ->
-	{ok, {_, Cfg}} = gen_server:call(?MODULE, {config, {get, AbsName}}),
-	{ok, Cfg}.
+	case catch(gen_server:call(?MODULE, {config, {get, AbsName}})) of
+		{'EXIT', Err} -> {error, Err};
+		{ok, {_, Cfg}} -> {ok, Cfg}
+	end.
 
-get(AbsName, Opt) ->
-	{ok, {_, Cfg}} = gen_server:call(?MODULE, {config, {get, AbsName}}),
-	{ok, epm:get(Opt, Cfg)}.
+get(AbsName0, {pkg, Opt0}) ->
+	get(AbsName0, {pkg, Opt0}, fun(AbsName, {pkg, Opt}) ->
+		case lists:prefix(AbsName, Opt) of
+			true when (AbsName =/= Opt) ->
+				{pkg, lists:subtract(Opt, AbsName)};
+			true ->
+				{pkg, [lists:last(AbsName)]};
+			false ->
+				{pkg, Opt0}
+		end
+	end);
+get(AbsName0, Opt0) ->
+	get(AbsName0, Opt0, fun(_, Opt) -> Opt end).
+
+get(AbsName0, Opt0, OptFun) ->
+	try
+		case gen_server:call(?MODULE, {config, {get, AbsName0}}) of
+			{ok, {AbsName, Cfg}} ->
+				Opt = OptFun(AbsName, Opt0),
+				Val = epm:get(Opt, Cfg),
+				{ok, Val};
+			{error, Err} ->
+				{error, Err}
+		end
+	catch
+		C:R ->
+			epm:log(error, "store:get: ~p (~p)", [filename:join(AbsName0), {C,R}]),
+			epm:log(error, "~p", [erlang:get_stacktrace()]),
+			{error, {C, R}}
+	end.
 
 list() ->
 	gen_server:call(?MODULE, {config, list}).
@@ -83,11 +112,15 @@ handle_call({config, {new, AbsName, Opts}}, _From, State) ->
 handle_call({config, {set, AbsName, Opts}}, _From, State) ->
 	case find({config, AbsName}, State) of
 		{ok, {CfgAbsName, Cfg0}} ->
-			Cfg = lists:foldl(fun({K, V}, Acc) ->
-				epm:set(K, V, Acc)
-			end, Cfg0, Opts),
-			{ok, NewState} = save({config, CfgAbsName}, Cfg, State),
-			{reply, {ok, Cfg}, NewState};
+			try
+				Cfg = lists:foldl(fun({K, V}, Acc) ->
+					epm:set(K, V, Acc)
+				end, Cfg0, Opts),
+				{ok, NewState} = save({config, CfgAbsName}, Cfg, State),
+				{reply, {ok, Cfg}, NewState}
+			catch
+				C:R  -> {reply, {error, {C, R}}, State}
+			end;
 		Err ->
 			{reply, Err, State}
 	end;
@@ -119,10 +152,9 @@ find({config, AbsName}, Orig, #state{configs = Cfgs} = State) ->
 	case lists:keyfind(AbsName, 1, Cfgs) of
 		false when length(AbsName) > 0 ->
 			NewName = lists:sublist(AbsName, length(AbsName) - 1),
-			find({config, NewName}, State);
+			find({config, NewName}, Orig, State);
 		false ->
-			Configs = [{configs, [X || {X, _} <- Cfgs]}],
-			error(no_config, [{absname, Orig}, Configs]);
+			{error, no_config};
 		{AbsName, Cfg} ->
 			{ok, {AbsName, Cfg}}
 	end.
