@@ -75,20 +75,20 @@ parse(Path) when is_binary(Path) ->
 	parse(Path, epm_pkg:new(RootName, PkgOpts)).
 
 -spec parse(binary(), Parent :: epm_pkg:pkg()) -> {ok, #cfg{}}.
-parse(Path, Pkg) ->
-	AbsName = epm_pkg:get(absname, Pkg),
+parse(Path, Pkg0) ->
+	AbsName = epm_pkg:get(absname, Pkg0),
 
 	AutoFetch = env(autofetch),
 	Exists = filelib:is_dir(Path),
 
 	if
 		not Exists and AutoFetch->
-			{ok, Cfg} = epm_store:get(AbsName),
-			epm_pkg:sync(Pkg, Cfg);
+			{ok, TmpCfg} = epm_store:get(AbsName),
+			epm_pkg:sync(Pkg0, TmpCfg);
 		true -> ok end,
 
 	lists:foreach(fun(Parser) ->
-		Parser:parse(Path, Pkg)
+		Parser:parse(Path, Pkg0)
 	end, [epm_parser_conf, epm_parser_rebar]),
 
 	case epm_store:get(AbsName, {pkg, AbsName}) of
@@ -96,10 +96,10 @@ parse(Path, Pkg) ->
 			epm:log(warning, "parse: ~s did not return any config"
 				, [filename:join(AbsName)]),
 		false;
-		{ok, Pkg1} ->
+		{ok, Pkg} ->
 			epm_pkg:foreach(fun(Dep) ->
 				parse(epm_pkg:get(path, Dep), Dep)
-			end, Pkg1),
+			end, Pkg),
 
 			{ok, _} = epm_store:get(AbsName)
 	end.

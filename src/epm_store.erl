@@ -41,16 +41,8 @@ get(AbsName) ->
 	end.
 
 get(AbsName0, {pkg, Opt0}) ->
-	get(AbsName0, {pkg, Opt0}, fun(AbsName, {pkg, Opt}) ->
-		case lists:prefix(AbsName, Opt) of
-			true when (AbsName =/= Opt) ->
-				{pkg, lists:subtract(Opt, AbsName)};
-			true ->
-				{pkg, [lists:last(AbsName)]};
-			false ->
-				{pkg, Opt0}
-		end
-	end);
+	%% Take special care when mapping pkg names as they m
+	get(AbsName0, {pkg, Opt0}, fun reduce_absname/2);
 get(AbsName0, Opt0) ->
 	get(AbsName0, Opt0, fun(_, Opt) -> Opt end).
 
@@ -113,9 +105,11 @@ handle_call({config, {set, AbsName, Opts}}, _From, State) ->
 	case find({config, AbsName}, State) of
 		{ok, {CfgAbsName, Cfg0}} ->
 			try
-				Cfg = lists:foldl(fun({K, V}, Acc) ->
-					epm:set(K, V, Acc)
+				Cfg = lists:foldl(fun({Opt0, V}, Acc) ->
+					Opt = reduce_absname(CfgAbsName, Opt0),
+					epm:set(Opt, V, Acc)
 				end, Cfg0, Opts),
+
 				{ok, NewState} = save({config, CfgAbsName}, Cfg, State),
 				{reply, {ok, Cfg}, NewState}
 			catch
@@ -140,6 +134,19 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
+%% @private fix overlapping pkg/absname
+reduce_absname(AbsName, {pkg, Opt}) ->
+	case lists:prefix(AbsName, Opt) of
+		true when AbsName =:= Opt ->
+			{pkg, [lists:last(Opt)]};
+		true ->
+			%% last component in AbsName =:= root package in config
+			{pkg, [lists:last(AbsName) | lists:subtract(Opt, AbsName)]};
+		_ ->
+			{pkg, Opt}
+	end;
+reduce_absname(_AbsName, Opt) ->
+	Opt.
 
 %% @private storage api
 exists({config, AbsName}, #state{configs = Cfgs}) ->
