@@ -12,18 +12,18 @@ name() ->
 	<<"git">>.
 
 init(Pkg0) ->
+	Path = epm_pkg:get(path, Pkg0),
 	%% The template check is in place to make sure we don't try to add
 	%% templates as dependencies
 	case epm_pkg:get(template, Pkg0) of
-		true ->
-			Pkg0;
-		false ->
+		false when Path == undefined ->
 			[_Name, AbsName] = epm_pkg:get([name, absname], Pkg0),
 			epm:log(debug, "agent:git: init ~p", [AbsName]),
 
 			{ok, Cfg} = epm_store:get(AbsName),
 			CodePath = buildpath(Pkg0, false, Cfg),
-			epm_pkg:set(path, CodePath, Pkg0)
+			epm_pkg:set(path, CodePath, Pkg0);
+		_ -> Pkg0
 	end.
 
 
@@ -127,6 +127,8 @@ buildpath(Pkg, Cache, Cfg) ->
 		false ->
 			<<>> end,
 
+	Path = epm_pkg:get(path, Pkg),
+
 	case Cache of
 		true ->
 			CacheDir = case epm_pkg:get(catalog, Pkg) of
@@ -138,7 +140,7 @@ buildpath(Pkg, Cache, Cfg) ->
 				, epm_os:escape_filename(CacheDir)
 				, epm_pkg:get(name, Pkg)
 				 ]);
-		false ->
+		false when Path == undefined ->
 			Path = filename:join([
 				  epm:env(libdir, <<"lib">>)
 				, <<((epm_pkg:get(name, Pkg)))/binary, Suffix/binary>>]),
@@ -146,5 +148,7 @@ buildpath(Pkg, Cache, Cfg) ->
 			case epm:get(root, Cfg) of
 				Path -> Path;
 				Root -> filename:join(Root, Path)
-			end
+			end;
+		false ->
+			Path
 	end.
