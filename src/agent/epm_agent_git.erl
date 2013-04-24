@@ -117,7 +117,7 @@ get_catalog([CtName | Tail], Cfg) ->
 	end.
 
 %% builds target path for pkg, if Cache =:= true then build the cached path
-buildpath(Pkg, Cache, _Cfg) ->
+buildpath(Pkg, Cache, Cfg) ->
 	% case epm:get(append_versions, true, Cfg) of
 	Suffix = case epm:env(append_versions, true) of
 		true ->
@@ -139,7 +139,9 @@ buildpath(Pkg, Cache, _Cfg) ->
 				, epm_pkg:get(name, Pkg)
 				 ]);
 		false ->
-			filename:join([epm:env(libdir, <<"lib">>)
+			filename:join([
+				  epm:get(root, Cfg)
+				, epm:env(libdir, <<"lib">>)
 				, <<((epm_pkg:get(name, Pkg)))/binary, Suffix/binary>>
 				])
 	end.
