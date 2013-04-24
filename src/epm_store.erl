@@ -35,11 +35,12 @@ new(AbsName, Opts) ->
 	gen_server:call(?MODULE, {config, {new, AbsName, Opts}}).
 
 get(AbsName) ->
-	gen_server:call(?MODULE, {config, {get, AbsName}}).
+	{ok, {_, Cfg}} = gen_server:call(?MODULE, {config, {get, AbsName}}),
+	{ok, Cfg}.
 
 get(AbsName, Opt) ->
-	{ok, Cfg} = gen_server:call(?MODULE, {config, {get, AbsName}}),
-	epm:get(Opt, Cfg).
+	{ok, {_, Cfg}} = gen_server:call(?MODULE, {config, {get, AbsName}}),
+	{ok, epm:get(Opt, Cfg)}.
 
 list() ->
 	gen_server:call(?MODULE, {config, list}).
@@ -81,11 +82,11 @@ handle_call({config, {new, AbsName, Opts}}, _From, State) ->
 
 handle_call({config, {set, AbsName, Opts}}, _From, State) ->
 	case find({config, AbsName}, State) of
-		{ok, Cfg0} ->
+		{ok, {CfgAbsName, Cfg0}} ->
 			Cfg = lists:foldl(fun({K, V}, Acc) ->
 				epm:set(K, V, Acc)
 			end, Cfg0, Opts),
-			{ok, NewState} = save({config, AbsName}, Cfg, State),
+			{ok, NewState} = save({config, CfgAbsName}, Cfg, State),
 			{reply, {ok, Cfg}, NewState};
 		Err ->
 			{reply, Err, State}
@@ -123,9 +124,10 @@ find({config, AbsName}, Orig, #state{configs = Cfgs} = State) ->
 			Configs = [{configs, [X || {X, _} <- Cfgs]}],
 			error(no_config, [{absname, Orig}, Configs]);
 		{AbsName, Cfg} ->
-			{ok, Cfg}
+			{ok, {AbsName, Cfg}}
 	end.
 
+%% @private low level storage, does not find parent config
 save({config, AbsName}, Cfg, #state{configs = Cfgs} = State) ->
 	{ok, State#state{
 		configs = lists:keystore(AbsName, 1, Cfgs, {AbsName, Cfg})}}.

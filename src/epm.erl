@@ -91,12 +91,12 @@ parse(Path, Pkg) ->
 		Parser:parse(Path, Pkg)
 	end, [epm_parser_conf, epm_parser_rebar]),
 
-	Pkg1 = epm_store:get(AbsName, {pkg, epm_pkg:get(absname, Pkg)}),
+	{ok, Pkg1} = epm_store:get(AbsName, {pkg, epm_pkg:get(absname, Pkg)}),
 	epm_pkg:foreach(fun(Dep) ->
 		parse(epm_pkg:get(path, Dep), Dep)
 	end, Pkg1),
 
-	epm_store:get(AbsName).
+	{ok, _} = epm_store:get(AbsName).
 
 -spec get(atom(), cfg()) -> term().
 get(Attrs, Cfg) when is_list(Attrs) ->

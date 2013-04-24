@@ -97,7 +97,7 @@ merge_pkg(AbsName, <<$~, Path/binary>>, Opts) ->
 			epm_store:set(AbsName, {pkg, PkgPath}, epm_pkg:set(Opts, Pkg))
 	end;
 merge_pkg(AbsName, Name, Opts) ->
-	Catalogs = epm_store:get(AbsName, catalogs),
+	{ok, Catalogs} = epm_store:get(AbsName, catalogs),
 	Pkg = case epm_catalog:select({pkg, Name}, Catalogs) of
 		[] ->
 			epm:log(debug, "parser:epm: creating pkg ~p", [Name]),

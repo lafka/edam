@@ -95,7 +95,9 @@ persist_pkg_cfg(AbsName, Pkg0) ->
 	%% give you a empty list instead of false
 	Partial =
 		if Pkg0#pkg.template -> [];
-		   true -> epm_store:get(AbsName, {partial, AbsName}) end,
+		   true ->
+			{ok, Partial0} = epm_store:get(AbsName, {partial, AbsName}),
+			Partial0 end,
 
 	Pkg1 = lists:foldl(fun({K, V}, Acc) ->
 		set(K, V, Acc)
@@ -115,8 +117,8 @@ maybe_add_catalog(_AbsName, #pkg{catalog = [_ | _]} = Pkg) ->
 maybe_add_catalog(_AbsName, #pkg{template = true} = Pkg) ->
 	Pkg;
 maybe_add_catalog(AbsName, Pkg) ->
-	Ctls0 = epm_catalog:select({pkg, epm_pkg:get(name, Pkg)}
-		, epm_store:get(AbsName, catalogs)),
+	{ok, Catalogs} = epm_store:get(AbsName, catalogs),
+	Ctls0 = epm_catalog:select({pkg, epm_pkg:get(name, Pkg)}, Catalogs),
 
 	Ctls = epm_catalog:map(fun(Ctl) -> epm_catalog:get(name, Ctl) end, Ctls0),
 
