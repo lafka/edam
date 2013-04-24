@@ -50,7 +50,7 @@ merge_dep({Name, _Vsn, Src}, Pkg) ->
 	BinName = atom_to_binary(Name, unicode),
 
 	epm_pkg:new(BinName, [
-		  {absname, epm_pkg:get(absname, Pkg) ++ [Name]}
+		  {absname, epm_pkg:get(absname, Pkg) ++ [BinName]}
 		, {version, Version}
 		, {{agent, ref}, Ref}
 		, {{agent, remote}, list_to_binary(Remote)}
