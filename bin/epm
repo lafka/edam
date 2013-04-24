@@ -122,7 +122,9 @@ target(["deps", "help" | _], _Opts) ->
         "= print [package]~n"
         "  Print out the current status for all your dependencies.~n"
         "  If package is given the configuration for that package~n"
-        "  will be used."
+        "  will be used.~n"
+        "~n"
+        "  --format=\"<fmt>\" can be used for custom printing"
         "~n"
        );
 
@@ -174,35 +176,8 @@ target(["deps", "check", Path], _Opts0) ->
 target(["deps", "print"], Opts) ->
     target(["deps", "print", "."], Opts);
 
-target(["deps", "print", Path], _Opts) ->
-    epm:set_env(autofetch, false),
-    {ok, Cfg} = epm:parse(Path),
-    io:format("Catalogs (~b):~n", [length(epm:get(catalogs, Cfg))]),
-    epm_catalog:foreach(fun(Ct) ->
-        [CtMod, Pkgs] = epm_catalog:get([module, pkgs], Ct),
-        Args = epm_catalog:get([name, resource], Ct)
-             ++ [CtMod:name(), length(Pkgs)],
-        io:format("= ~s.~s (~s: ~b packages)~n", Args)
-    end, Cfg),
-    Printer = fun(Iter, Fun0, {Acc0, Ignore0, N0, X0}) ->
-        epm_pkg:foldl(fun(Pkg, {Acc, Ignore1, _N1, X}) ->
-            Name = epm_pkg:get(name, Pkg),
-            Out = io_lib:format("~" ++ integer_to_list(N0) ++ ".s~s:~s=~s"
-                , ["= "] ++ epm_pkg:get([catalog, name, version], Pkg)),
-            case lists:member(Name, Ignore1) of
-                true ->
-                    Acc1 = io_lib:format("~s~s (defined previously)~n", [Acc, Out]),
-                    {Acc1, Ignore1, N0, X};
-                false ->
-                    Acc1 = io_lib:format("~s~s~n", [Acc, Out]),
-                    Fun0(Pkg, Fun0, {Acc1, [Name | Ignore1], N0 + 2, X + 1})
-            end
-        end, {Acc0, Ignore0, N0, X0}, Iter)
-    end,
-    {Output, _, _, Count} = Printer(Cfg, Printer, {"", [], 2, 0}),
-    io:format("~nDependencies (~b/~b):~n",
-        [length(epm:get(deps, Cfg)), Count]),
-    io:format("~s~n", [Output]);
+target(["deps", "print", Path], Opts) ->
+    printer(Path, Opts, []);
 
 target(["deps" | Arg], _Opts) ->
     io:format("epm deps: unknown command: ~p~n", [Arg]),
@@ -245,3 +220,71 @@ target(["key", "list"], _Opts) ->
 target(Args, _Opts) ->
     io:format("unknown command ~p~n~n", [Args]),
     usage().
+
+
+printer(Path, ["--format=" ++ Fmt | T], Opts) ->
+    printer(Path, T, [{format, Fmt} | Opts]);
+printer(Path, [_H | T], Opts) ->
+    epm:log(debug, "ignore opt: ~p", [_H]),
+    printer(Path, T, Opts);
+printer(Path, [], Opts) ->
+    epm:set_env(autofetch, false),
+
+    {ok, _} = epm:parse(Path),
+    {ok, Cfgs} = epm_store:list(),
+
+    epm:log(debug, "configs: ~p", [Cfgs]),
+
+    Fmt = proplists:get_value(format, Opts
+        , "%t= %=name=%=version (%=agent.ref#%=agent.remote)"),
+
+    epm:log(debug, "opts: ~p", [Opts]),
+
+    lists:foreach(fun(AbsName) ->
+        io:format(":: Config (~s)~n", [filename:join(AbsName)]),
+
+        {ok, Cfg} = epm_store:get(AbsName),
+
+        Deps = epm:get(pkgs, Cfg),
+        lists:foreach(fun(Dep) -> print_pkg(Fmt, Dep) end, Deps)
+    end, Cfgs).
+
+print_pkg(Fmt0, Pkg) ->
+    Fmt = re:split(Fmt0, "(%=[a-z0-9_.]+|%[a-zA-Z])", [trim]),
+    io:format(" "),
+    print_expander(Fmt, Pkg),
+    io:format("~n"),
+    epm_pkg:foreach(fun(Dep) -> print_pkg(Fmt0, Dep) end, Pkg).
+
+%% expansions:
+%% %t        -> N number of spaces where N =:= depth
+%% %c        -> List of catalog names
+%% %=<ident> -> A direct call to epm_pkg(get, _)
+print_expander([], _Pkg) ->
+    ok;
+print_expander([<<"%t">> | Tail], Pkg) ->
+    N = integer_to_list(length(epm_pkg:get(absname, Pkg)) - 1),
+    io:format("~" ++ N ++ ".s", [" "]),
+    print_expander(Tail, Pkg);
+print_expander([<<"%c">> | Tail], Pkg) ->
+    io:format("~p", [epm_pkg:get(catalog, Pkg)]),
+    print_expander(Tail, Pkg);
+print_expander([<<"%=", K/binary>> | Tail], Pkg) ->
+    Key = case [binary_to_atom(P, unicode) || P <- binary:split(K, <<$.>>)] of
+		[K0] -> K0;
+		K0 -> list_to_tuple(K0)
+	end,
+    io:format("~s", [epm_pkg:get(Key, Pkg)]),
+    print_expander(Tail, Pkg);
+print_expander([Part | Tail], Pkg) ->
+    io:format(Part),
+    print_expander(Tail, Pkg).
+
+
+%    io:format("Catalogs (~b):~n", [length(epm:get(catalogs, Cfg))]),
+%    epm_catalog:foreach(fun(Ct) ->
+%        [CtMod, Pkgs] = epm_catalog:get([module, pkgs], Ct),
+%        Args = epm_catalog:get([name, resource], Ct)
+%             ++ [CtMod:name(), length(Pkgs)],
+%        io:format("= ~s.~s (~s: ~b packages)~n", Args)
+%    end, Cfg),
