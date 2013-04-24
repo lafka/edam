@@ -16,7 +16,7 @@ catalogs <<
 %  assume specific version -> #(dep) = #(version)
 %  Use a specific repo     -> #(dep) @ #(repo identifier)
 %  Specify opts            -> #(dep) [ #(key) = #(val), .. ]
-dependencies <-
+dependencies <<
 	lager  =1.2.2 @github.basho #1.2.2
 	tavern @github.lafka
 	riakc @github.basho [
