@@ -139,9 +139,12 @@ buildpath(Pkg, Cache, Cfg) ->
 				, epm_pkg:get(name, Pkg)
 				 ]);
 		false ->
-			filename:join([
-				  epm:get(root, Cfg)
-				, epm:env(libdir, <<"lib">>)
-				, <<((epm_pkg:get(name, Pkg)))/binary, Suffix/binary>>
-				])
+			Path = filename:join([
+				  epm:env(libdir, <<"lib">>)
+				, <<((epm_pkg:get(name, Pkg)))/binary, Suffix/binary>>]),
+
+			case epm:get(root, Cfg) of
+				Path -> Path;
+				Root -> filename:join(Root, Path)
+			end
 	end.
