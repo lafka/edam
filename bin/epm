@@ -156,13 +156,26 @@ target(["deps", "sync", Path], _Opts0) ->
 
     epm:log(debug, "configs: ~p", [Cfgs]),
 
-    SyncPkgs = fun(Pkg, Continuation) ->
+    SyncPkgs = fun(Pkg, Cfg, Continuation) ->
+        %% Not the prettiest, but does the job of not syncing root
+        Sync = case epm_pkg:get(isolate, Pkg) of
+            <<".">> -> false;
+              "."   -> false;
+               _    -> true end,
+
+        if
+            Sync -> epm_pkg:sync(Pkg, Cfg);
+            true -> ok end,
+
         case length(epm_pkg:get(deps, Pkg)) of
             0 -> ok;
             Length ->
                 epm:log(notice, "Syncing ~b package(s) in config ~s"
                     , [Length , filename:join(epm_pkg:get(absname, Pkg))]),
-                epm_pkg:foreach(fun(Dep) -> Continuation(Dep, Continuation) end, Pkg)
+
+                epm_pkg:foreach(fun(Dep) ->
+                    Continuation(Dep, Cfg, Continuation)
+                end, Pkg)
         end
     end,
 
@@ -177,7 +190,7 @@ target(["deps", "sync", Path], _Opts0) ->
                 epm:log(notice, "No packages found in config ~s"
                     , [filename:join(AbsName)]);
             Deps ->
-                lists:foreach(fun(Dep) -> SyncPkgs(Dep, SyncPkgs) end, Deps)
+                lists:foreach(fun(Dep) -> SyncPkgs(Dep, Cfg, SyncPkgs) end, Deps)
         end
     end, Cfgs);
 

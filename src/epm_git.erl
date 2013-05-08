@@ -4,6 +4,8 @@
 -export([
 	  checkout/2
 	, fetch/1
+	, pull/1
+	, pull/2
 	, clone/2
 	, clone/3
 	, status/2
@@ -42,6 +44,23 @@ fetch(Path) ->
 		, fun() -> call(Cmd, Path, ok, {error, fetch}) end
 		, fun() -> epm:log(command, "~s $ ~s", [Path, Cmd]), ok end).
 
+
+-spec pull(file:filename_all()) -> ret().
+pull(Path) ->
+	pull(Path, ref(Path)).
+
+-spec pull(file:filename_all(), ref()) -> ret().
+pull(Path, Ref) ->
+	case ref(Path) of
+		Ref -> ok;
+		_OldRef -> checkout(Path, Ref)
+	end,
+
+	Cmd = io_lib:format("git pull origin ~s", [Ref]),
+
+	epm:unless(dryrun
+		, fun() -> call(Cmd, Path, ok, {error, pull}) end
+		, fun() -> epm:log(command, "~s $ ~s", [Path, Cmd]), ok end).
 
 -spec clone(file:filename_all(), remote()) -> ret().
 clone(Path, Remote) ->

@@ -77,7 +77,7 @@ fetch_pkg(Pkg, Catalog, Cfg) ->
 	case filelib:is_dir(CodePath) of
 		true ->
 			ok = epm_git:fetch(CodePath),
-			ok = epm_git:checkout(CodePath, Ref);
+			ok = epm_git:pull(CodePath, Ref);
 		false ->
 			CachePath = buildpath(Pkg, true, Cfg),
 			ok = epm_git:clone(CodePath, CachePath),
