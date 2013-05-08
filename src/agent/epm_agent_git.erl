@@ -127,7 +127,7 @@ buildpath(Pkg, Cache, Cfg) ->
 		false ->
 			<<>> end,
 
-	Path = epm_pkg:get(path, Pkg),
+	Path0 = epm_pkg:get(path, Pkg),
 
 	case Cache of
 		true ->
@@ -140,7 +140,7 @@ buildpath(Pkg, Cache, Cfg) ->
 				, epm_os:escape_filename(CacheDir)
 				, epm_pkg:get(name, Pkg)
 				 ]);
-		false when Path == undefined ->
+		false when Path0 == undefined ->
 			Path = filename:join([
 				  epm:env(libdir, <<"lib">>)
 				, <<((epm_pkg:get(name, Pkg)))/binary, Suffix/binary>>]),
@@ -150,5 +150,5 @@ buildpath(Pkg, Cache, Cfg) ->
 				Root -> filename:join(Root, Path)
 			end;
 		false ->
-			Path
+			Path0
 	end.
