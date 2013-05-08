@@ -46,6 +46,9 @@ parse_args(["-d" | T], Acc) ->
     epm:set_env(dryrun, true),
     epm:log(info, "epm: using dry-run, nothing will be done"),
     parse_args(T, Acc);
+parse_args(["--suffix" | T], Acc) ->
+    epm:set_env(append_versions, false),
+    parse_args(T, Acc);
 parse_args(["--rebar" | T], Acc) ->
     epm:set_env(rebar_compatability, true),
     epm:set_env(append_versions, false),

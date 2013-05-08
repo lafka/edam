@@ -30,11 +30,11 @@ EPM was designed to handle dependencies in more controlled way.
 + Add async operations for checkout and friends, build 'action list' returned
   by parse/{0,1} which should define operations required for fixing
   consistency errors before main operation can process (<- think twice)
++ `epm_parser_epm` must use `<<` append operation to work
 
 #### Checkout
 + Make libdir/append_versions pkg specific (in config).
 + Fix automatic catalog selection AND catalog priority
-+ Make cached version of git use mirror to forward remote branches \*\*
 
 #### Performance
 + Flatten and merge deps list before iterating

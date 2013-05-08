@@ -2,10 +2,11 @@
 
 %% API for working tree
 -export([
-	  checkout/3
-	, fetch/2
-	, clone/4
-	, status/3
+	  checkout/2
+	, fetch/1
+	, clone/2
+	, clone/3
+	, status/2
 	]).
 
 %% API for working with Git info/config
@@ -20,10 +21,10 @@
 -type ref() :: binary() | '_'.
 -type remote() :: binary().
 
--spec checkout(filename:filename_all(), ref(), epm:cfg()) -> ret().
-checkout(Path, '_', Cfg) ->
-	checkout(Path, hd(tags(Path)), Cfg);
-checkout(Path, Ref, _Cfg) ->
+-spec checkout(filename:filename_all(), ref()) -> ret().
+checkout(Path, '_') ->
+	checkout(Path, hd(tags(Path)));
+checkout(Path, Ref) ->
 	Cmd = io_lib:format("git checkout ~s", [Ref]),
 
 	%% @todo 2013-04-20; make dryrun part of config not env
@@ -32,8 +33,8 @@ checkout(Path, Ref, _Cfg) ->
 		, fun() -> epm:log(command, "~s $ ~s", [Path, Cmd]) end).
 
 
--spec fetch(file:filename_all(), epm:cfg()) -> ret().
-fetch(Path, _Cfg) ->
+-spec fetch(file:filename_all()) -> ret().
+fetch(Path) ->
 	Cmd = "git fetch --all",
 
 	%% @todo 2013-04-20; make dryrun part of config not env
@@ -42,15 +43,19 @@ fetch(Path, _Cfg) ->
 		, fun() -> epm:log(command, "~s $ ~s", [Path, Cmd]), ok end).
 
 
--spec clone(file:filename_all(), ref(), remote(), epm:cfg()) -> ret().
-clone(Path, Ref, Remote, Cfg) ->
-	Cmd1 = io_lib:format("git clone ~s ~s", [Remote, Path]),
+-spec clone(file:filename_all(), remote()) -> ret().
+clone(Path, Remote) ->
+	clone(Path, Remote, []).
+
+-spec clone(file:filename_all(), remote(), [string()]) -> ret().
+clone(Path, Remote, Opts0) ->
+	Opts = string:join(Opts0, " "),
+	Cmd1 = io_lib:format("git clone ~s ~s ~s", [Opts, Remote, Path]),
 
 	%% @todo 2013-04-20; make dryrun part of config not env
 	epm:unless(dryrun
 		, fun() ->
-			ok = call(Cmd1, ok, {error, clone}),
-			checkout(Path, Ref, Cfg)
+			ok = call(Cmd1, ok, {error, clone})
 		end
 		, fun() ->
 			{ok, Cwd} = file:get_cwd(),
@@ -58,17 +63,17 @@ clone(Path, Ref, Remote, Cfg) ->
 		end).
 
 
--spec status(file:filename_all(), ref(), epm:cfg()) -> stale | ret().
-status(Path, '_', Cfg) ->
+-spec status(file:filename_all(), ref()) -> stale | ret().
+status(Path, '_') ->
 	case tags(Path) of
 		[Tag | _] ->
-			status(Path, Tag, Cfg);
+			status(Path, Tag);
 		[] ->
-			status(Path, any, Cfg)
+			status(Path, any)
 	end;
-status(Path, any, Cfg) ->
-	status(Path, ref(Path), Cfg);
-status(Path, Ref, _Cfg) ->
+status(Path, any) ->
+	status(Path, ref(Path));
+status(Path, Ref) ->
 	case epm_os:cmd("git log HEAD..~s", [Ref], Path) of
 		{ok, []} -> ok;
 		{ok, _} -> stale;

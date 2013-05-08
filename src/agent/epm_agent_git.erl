@@ -57,7 +57,7 @@ status(Pkg, Catalog, Cfg) ->
 	HasCode = filelib:is_dir(CodePath),
 	if
 		HasCode ->
-			epm_git:status(CodePath, epm_pkg:get({agent, ref}, Pkg), Cfg);
+			epm_git:status(CodePath, epm_pkg:get({agent, ref}, Pkg));
 		true ->
 			missing
 	end.
@@ -76,11 +76,12 @@ fetch_pkg(Pkg, Catalog, Cfg) ->
 
 	case filelib:is_dir(CodePath) of
 		true ->
-			ok = epm_git:fetch(CodePath, Cfg),
-			ok = epm_git:checkout(CodePath, Ref, Cfg);
+			ok = epm_git:fetch(CodePath),
+			ok = epm_git:checkout(CodePath, Ref);
 		false ->
 			CachePath = buildpath(Pkg, true, Cfg),
-			ok = epm_git:clone(CodePath, Ref, CachePath, Cfg)
+			ok = epm_git:clone(CodePath, CachePath),
+			ok = epm_git:checkout(CodePath, Ref)
 	end.
 
 update_cache(Pkg, Catalogs, Cfg) ->
@@ -98,10 +99,10 @@ update_cache(Pkg, Catalogs, Cfg, AutoFetch) ->
 
 	case {filelib:is_dir(CachePath), AutoFetch and epm:env(autofetch)} of
 		{true, true} ->
-			ok = epm_git:fetch(CachePath, Cfg);
+			ok = epm_git:fetch(CachePath);
 		{false, true} ->
 			epm:log(info, "clone:  ~p -> ~p", [Remote, CachePath]),
-			ok = epm_git:clone(CachePath, "master", Remote, Cfg);
+			ok = epm_git:clone(CachePath, Remote, ["--mirror"]);
 		{_, false} ->
 			ok
 	end.
