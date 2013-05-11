@@ -31,16 +31,31 @@ EPM was designed to handle dependencies in more controlled way.
   by parse/{0,1} which should define operations required for fixing
   consistency errors before main operation can process (<- think twice)
 + `epm_parser_epm` must use `<<` append operation to work
++ Dependencies are only allowed to override local catalogs (related to ^?)
++ Allow for appending information to a pkg by path or by name:
+	`~meck =0.7.2 #0.7.2` will set version and ref of meck to 0.7.2
+	`~[riakc, _, meck] =0.7.2 #master` will set any meck versions found
+	under riakc to 0.7.2 but still use the master branch. This allows
+	for tricking EPM do belive you are running the same version of the
+	code.
++ Keep a list of synced repositores to avoid multiple syncs
 
 #### Checkout
 + Make libdir/append_versions pkg specific (in config).
 + Fix automatic catalog selection AND catalog priority
++ If no version is specified, epm_pkg should find the version
+  specified by the .app file, preferably with a symlink (if none exits)
++ Cleanout non-referenced directories
++ When checking updating GIT repo that has been rewritten, merge
+  conflict will happend?
 
 #### Performance
 + Flatten and merge deps list before iterating
 
 ##### Conflicts
 + Find and warn about packages with version conflicts.
+ + Add flag  to ignore one or more specific conflicts (`--ignore meck`
+   or `--ignore-all`)
 + Find and warn about auto configured packages with multiple available catalogs?
 
 # Various resolve functionality
