@@ -36,6 +36,9 @@ parse_args(_, error) -> error;
 parse_args(["--debug" | T], Acc) ->
     epm:set_env(log_level, debug),
     parse_args(T, Acc);
+parse_args(["--cache" | T], Acc) ->
+    epm:set_env(fetch_cache, false),
+    parse_args(T, Acc);
 parse_args(["--notice" | T], Acc) ->
     epm:set_env(log_level, notice),
     parse_args(T, Acc);
@@ -157,14 +160,18 @@ target(["deps", "sync", Path], _Opts0) ->
     epm:log(debug, "configs: ~p", [Cfgs]),
 
     SyncPkgs = fun(Pkg, Cfg, Continuation) ->
+        Key = [pkg | epm_pkg:get([name, version], Pkg)],
+        Synced = true == get(Key),
         %% Not the prettiest, but does the job of not syncing root
         Sync = case epm_pkg:get(isolate, Pkg) of
             <<".">> -> false;
               "."   -> false;
-               _    -> true end,
+               _    -> Synced and true end,
 
         if
-            Sync -> epm_pkg:sync(Pkg, Cfg);
+            Sync ->
+                epm_pkg:sync(Pkg, Cfg),
+                put(Key, true);
             true -> ok end,
 
         case length(epm_pkg:get(deps, Pkg)) of

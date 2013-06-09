@@ -85,9 +85,18 @@ fetch_pkg(Pkg, Catalog, Cfg) ->
 	end.
 
 update_cache(Pkg, Catalogs, Cfg) ->
-	update_cache(Pkg, Catalogs, Cfg, true).
+	update_cache(Pkg, Catalogs, Cfg, true, epm:env(fetch_cache)).
 
 update_cache(Pkg, Catalogs, Cfg, AutoFetch) ->
+	update_cache(Pkg, Catalogs, Cfg, AutoFetch, epm:env(fetch_cache)).
+
+update_cache(Pkg, _Catalogs, Cfg, _AutoFetch, false) ->
+	CachePath = buildpath(Pkg, true, Cfg),
+	case filelib:is_dir(CachePath) of
+		true -> ok;
+		false -> {error, missing_pkg_cache}
+	end;
+update_cache(Pkg, Catalogs, Cfg, AutoFetch, true) ->
 	CachePath = buildpath(Pkg, true, Cfg),
 
 	{ok, Remote} = case epm_pkg:get({agent, remote}, Pkg) of

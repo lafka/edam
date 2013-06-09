@@ -25,6 +25,7 @@
 	, {cachedir, ".cache"}
 	, {dryrun, false}
 	, {libdir, "lib"}
+	, {fetch_cache, true}
 	]).
 
 -type key() :: atom() | tuple(atom()).
