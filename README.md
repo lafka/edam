@@ -25,6 +25,9 @@ EPM was designed to handle dependencies in more controlled way.
 
 ### Needs hacking:
 
+#### Misc
++ Add logging for side-effects (e.g. "moved from _ref-A_ to _ref-B_")
+
 #### Parsing
 + Add a `facts` to provide default options like libdir, append_versions (config is always parsed for deps, but facts are only processed for isolate/root pkgs)
 + Add async operations for checkout and friends, build 'action list' returned
@@ -48,6 +51,11 @@ EPM was designed to handle dependencies in more controlled way.
 + Cleanout non-referenced directories
 + When checking updating GIT repo that has been rewritten, merge
   conflict will happend?
++ Validate that dependencies that change GIT remote gets propagated to
+  config
++ When cache directory change, propegate update to lib/\_ aswell.
++ Calculate all referenced directories and delete non needed in .cache
+  and lib/
 
 #### Performance
 + Flatten and merge deps list before iterating
