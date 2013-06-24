@@ -1,4 +1,5 @@
 /ebin/
+*.beam
 tags
 /erl_crash.dump
 /epm
