@@ -1,0 +1,35 @@
+%% ex: ts=4 sw=4 ft=erlang et
+
+{application, edam
+    [
+      {description, "Edam: Erlang Dependency Managment"
+    , {vsn, "0.1.0"}
+    , {modules, [
+          edm
+        , edm_cmd_deps
+        , edm_cmd_sign
+        , edm_cmd_key
+        , edm_cmd_build
+
+        , edm_agent_void
+        , edm_agent_git
+
+        , edm_catalog
+        , edm_catalog_github
+        , edm_catalog_local
+
+        , edm_parser_rebar
+        , edm_parser_otp
+
+        , edm_pkg
+
+        , edm_cfg
+        , edm_cache
+        , '_git'
+        , '_os'
+        , '_iter'
+    ]}
+    , {registered, []}
+    , {applications, [kernel, stdlib ]}
+    , {env, []}
+]}.

@@ -1,0 +1,5 @@
+/ebin/
+tags
+/erl_crash.dump
+/epm
+/.cache
