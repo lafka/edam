@@ -60,7 +60,7 @@ save(Cfg) ->
 get(Attrs, Cfg) when is_list(Attrs) ->
 	[get(Attr, Cfg) || Attr <- Attrs];
 get(catalogs, Cfg)        -> Cfg#'edm_cfg.cfg'.catalogs;
-get(pkgs, Cfg)            -> Cfg#'edm_cfg.cfg'.pkgs;
+get(deps, Cfg)            -> Cfg#'edm_cfg.cfg'.deps;
 get(path, Cfg)            -> Cfg#'edm_cfg.cfg'.path;
 get(opts, Cfg)            -> Cfg#'edm_cfg.cfg'.opts;
 get({opt, Key}, Cfg) ->
@@ -73,14 +73,14 @@ get({opt, Key}, Cfg) ->
 
 -spec set(atom(), Val, cfg()) -> Val when Val :: term().
 set(catalogs, Val, Cfg)    -> Cfg#'edm_cfg.cfg'{catalogs = Val};
-set(pkgs, Val, Cfg)        -> Cfg#'edm_cfg.cfg'{pkgs = Val};
+set(deps, Val, Cfg)        -> Cfg#'edm_cfg.cfg'{deps = Val};
 set(path, Val, Cfg)        -> Cfg#'edm_cfg.cfg'{path = Val};
 set({opt, K}, Val, #'edm_cfg.cfg'{opts = Opts} = Cfg) ->
 	Cfg#'edm_cfg.cfg'{opts = lists:keystore(K, 1, Opts, {K, Val})}.
 
 iter(Rec, '_') ->
-	iter(Rec, pkgs);
-iter(#'edm_cfg.cfg'{pkgs = R}, pkgs) ->
+	iter(Rec, deps);
+iter(#'edm_cfg.cfg'{deps = R}, deps) ->
 	R;
 iter(#'edm_cfg.cfg'{opts = R}, opts) ->
 	R;

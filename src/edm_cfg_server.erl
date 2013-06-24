@@ -93,7 +93,7 @@ handle_call({config, {get, AbsName}}, _From, State) ->
 	{reply, Reply, State};
 
 handle_call({config, {new, AbsName, Opts}}, _From, State) ->
-	case lists:keymember(root, 1, Opts) of
+	case lists:keymember(path, 1, Opts) of
 		true ->
 			Cfg = edm_cfg:new(Opts),
 			case exists({config, AbsName}, State) of
@@ -105,7 +105,7 @@ handle_call({config, {new, AbsName, Opts}}, _From, State) ->
 					{reply, {ok, Cfg}, NewState}
 			end;
 		false ->
-			{reply, {error, root_not_set}, State}
+			{reply, {error, path_not_set}, State}
 	end;
 
 handle_call({config, {save, AbsName, Cfg}}, _From, State) ->
@@ -157,7 +157,7 @@ reduce_absname(AbsName, {pkg, Opt}) ->
 		true when AbsName =:= Opt ->
 			{pkg, [lists:last(Opt)]};
 		true ->
-			%% last component in AbsName =:= root package in config
+			%% last component in AbsName =:= path package in config
 			{pkg, [lists:last(AbsName) | lists:subtract(Opt, AbsName)]};
 		_ ->
 			{pkg, Opt}
@@ -210,10 +210,11 @@ startup_test() ->
 
 cfg_test() ->
 	Path = filename:absname("./"),
-	{ok, _P} = start_link(),
-	{ok, Cfg0} = new([<<"test">>], [{root, Path}]),
-	{ok, Cfg1} = new([<<"test">>, <<"1">>], [{root, filename:join(Path, <<"1">>)}]),
-	{ok, Cfg2} = new([<<"test">>, <<"2">>], [{root, filename:join(Path, <<"2">>)}]),
+	{ok, _Pid} = start_link(),
+	{ok, Cfg0} = new([<<"test">>], [{path, Path}]),
+	{ok, Cfg1} = new([<<"test">>, <<"1">>], [{path, filename:join(Path, <<"1">>)}]),
+
+	{ok, Cfg2} = new([<<"test">>, <<"2">>], [{path, filename:join(Path, <<"2">>)}]),
 	?assertEqual({ok, Cfg0}, get([<<"test">>])),
 	?assertEqual({ok, Cfg1}, get([<<"test">>, <<"1">>])),
 	?assertEqual({ok, Cfg2}, get([<<"test">>, <<"2">>])),
