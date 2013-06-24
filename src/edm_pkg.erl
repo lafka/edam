@@ -31,16 +31,16 @@
 
 -type name() :: binary().
 -type vsn() :: binary() | any.
--type pkgattrs() :: name | absname | pkgname | version | catalog | deps |
+-type attrs() :: name | absname | pkgname | version | catalog | deps |
                     agent | {agent, atom()}| path | isolate | template.
 
--export_type([pkg/0]).
+-export_type([pkg/0, name/0, vsn/0, attrs/0]).
 
 -spec new(binary()) -> #'edm_pkg.pkg'{}.
 new(Name) ->
 	new(Name, []).
 
--spec new(binary(), Attrs :: [{pkgattrs(), term()}]) -> #'edm_pkg.pkg'{}.
+-spec new(binary(), Attrs :: [{attrs(), term()}]) -> #'edm_pkg.pkg'{}.
 new(Name, Attrs0) ->
 	BaseAttrs = [{absname, [Name]}, {name, Name}, {pkgname, Name}],
 	Attrs = lists:ukeymerge(1
@@ -72,7 +72,7 @@ sync(#'edm_pkg.pkg'{agent = {Agent,_}} = Pkg, Cfg) ->
 status(#'edm_pkg.pkg'{agent = {Agent,_}} = Pkg, Cfg) ->
 	Agent:status(Pkg, Cfg).
 
--spec get(pkgattrs() | list(pkgattrs()), pkg()) -> [term()].
+-spec get(attrs() | list(attrs()), pkg()) -> [term()].
 get(Attrs, Pkg) when is_list(Attrs) ->
 	[get(Attr, Pkg) || Attr <- Attrs];
 get(name, Pkg)              -> Pkg#'edm_pkg.pkg'.name;
@@ -95,7 +95,7 @@ get({agent, Opt}, #'edm_pkg.pkg'{agent = {_, Opts}}) ->
 			undefined
 	end.
 
--spec set(pkgattrs(), term(), pkg()) -> none().
+-spec set(attrs(), term(), pkg()) -> none().
 set(name, Val, Pkg)         -> Pkg#'edm_pkg.pkg'{name = Val};
 set(absname, Val, Pkg)      -> Pkg#'edm_pkg.pkg'{absname = Val};
 set(pkgname, Val, Pkg)      -> Pkg#'edm_pkg.pkg'{pkgname = Val};

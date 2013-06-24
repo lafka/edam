@@ -6,12 +6,16 @@
 
 -record('edm_cfg.cfg', {
 	  catalogs = [] :: [edm_cat:cat()]
-	, pkgs = [] :: [edm_pkg:pkg()]
+	, deps = [] :: [pkgconst()]
 	, opts = [] :: [{atom(), term()}]
 	, path :: binary()
 	}).
 
 -opaque cfg() :: #'edm_cfg.cfg'{}.
+
+-type pkgconst() :: {edm_pkg:name(),
+	  [{edm_pkg:attrs(), term()}]
+	, [{edm_pkg:attrs(), term()}]}.
 
 -export_type([cfg/0]).
 
