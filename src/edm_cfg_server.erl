@@ -43,7 +43,8 @@ persist(Cfg) ->
 get(AbsName) ->
 	case catch(gen_server:call(?MODULE, {config, {get, AbsName}})) of
 		{'EXIT', Err} -> {error, Err};
-		{ok, {_, Cfg}} -> {ok, Cfg}
+		{ok, {_, Cfg}} -> {ok, Cfg};
+		{error, no_config} -> {error, not_found}
 	end.
 
 get(AbsName0, {pkg, Opt0}) ->
@@ -220,17 +221,6 @@ cfg_test() ->
 	?assertEqual({ok, Cfg0}, get([<<"test">>, <<"3">>])),
 	?assertEqual({ok, Cfg1}, get([<<"test">>, <<"1">>, <<"a">>])),
 	?assertEqual({error, not_found}, get([<<"unknown">>])),
-	ok = gen_server:call(?MODULE, stop).
 
-compat_test() ->
-	Path = filename:absname("./"),
-	{ok, _P} = start_link(),
-	ExtCfg = edm_cfg:new([{root, Path}]),
-	{ok, StoredCfg} = new([<<"test">>], [{root, Path}]),
-	?assertEqual(ExtCfg, StoredCfg),
-	{K, V} = {{pkg, [<<"pkg">>]}, edm_pkg:new(<<"pkg">>)},
-	ExtCfg1 = edm_cfg:set(K, V, ExtCfg),
-	{ok, StoredCfg1} = set([<<"test">>], K, V),
-	?assertEqual(ExtCfg1, StoredCfg1),
 	ok = gen_server:call(?MODULE, stop).
 -endif.

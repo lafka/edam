@@ -25,13 +25,30 @@ clean:
 	rm -fv .eunit/*.beam
 	rm -fv erl_crash.dump
 
-test/%.erl:
+test: eunit ct
+
+eunit/%.erl:
 	$(ERL) -D TEST -noshell -pa ebin -eval "eunit:test($(shell echo $@ | sed -E 's/.*\/(.*).erl/\1/'), [verbose])" -s init stop
 
-test: $(wildcard src/*.erl)
+eunit: clean compile
 	$(ERL) erl -D TEST -noshell -pa ebin -eval \
 	"eunit:test([$(shell echo $(wildcard src/*.erl) | sed 's/src\///g; s/.erl/,/g;s/,$$//')] \
 	, [verbose])" -s init stop
+
+# CT Tests.
+
+CT_RUN = ct_run \
+	-noshell \
+	-pa ebin lib/*/ebin \
+	-dir test \
+	-logdir logs
+#	-cover test/cover.spec
+
+ct: ERLC_OPTS += -DTEST=1
+ct: clean compile
+	@mkdir -p logs/
+	@$(CT_RUN) -suite parser_SUITE
+
 
 BASEDIR = $(shell basename $(PWD))
 script: compile
