@@ -10,10 +10,10 @@
                      , {info, 3}, {debug, 4}]).
 
 '$handle_undefined_function'(Fun, Args0) ->
-	Level = edm_env:get('log.level', 3),
+	Level = edm_env:get('log.level', 100),
 
 	try lists:keyfind(Fun, 1, edm_env:get('log.tags', ?tagsdefault)) of
-		{Fun, N} when N >= Level ->
+		{Fun, N} when N =< Level ->
 			Args1 = case length(Args0) of
 				  2 -> Args0
 				; 1 -> Args0 ++ [[]] end,

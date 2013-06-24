@@ -36,7 +36,6 @@ new(AbsName, Opts) ->
 
 -spec persist(edm_cfg:cfg()) -> ok.
 persist(Cfg) ->
-	edm_log:debug("persisting configuration ~p", [Cfg]),
 	AbsName = edm_cfg:get(path, Cfg),
 	ok = gen_server:call(?MODULE, {config, {save, AbsName, Cfg}}).
 
@@ -198,30 +197,3 @@ format_exception(Class, Reason, Trace, Indent) ->
 save({config, AbsName}, Cfg, #state{configs = Cfgs} = State) ->
 	{ok, State#state{
 		configs = lists:keystore(AbsName, 1, Cfgs, {AbsName, Cfg})}}.
-
-
--ifdef(TEST).
-
--include_lib("eunit/include/eunit.hrl").
-
-startup_test() ->
-	{ok, _P} = start_link(),
-	?assertEqual(ok, gen_server:call(?MODULE, stop)).
-
-cfg_test() ->
-	Path = filename:absname("./"),
-	{ok, _Pid} = start_link(),
-	{ok, Cfg0} = new([<<"test">>], [{path, Path}]),
-	{ok, Cfg1} = new([<<"test">>, <<"1">>], [{path, filename:join(Path, <<"1">>)}]),
-
-	{ok, Cfg2} = new([<<"test">>, <<"2">>], [{path, filename:join(Path, <<"2">>)}]),
-	?assertEqual({ok, Cfg0}, get([<<"test">>])),
-	?assertEqual({ok, Cfg1}, get([<<"test">>, <<"1">>])),
-	?assertEqual({ok, Cfg2}, get([<<"test">>, <<"2">>])),
-	%% Don't have a config on it's own so we match the closes in abspath
-	?assertEqual({ok, Cfg0}, get([<<"test">>, <<"3">>])),
-	?assertEqual({ok, Cfg1}, get([<<"test">>, <<"1">>, <<"a">>])),
-	?assertEqual({error, not_found}, get([<<"unknown">>])),
-
-	ok = gen_server:call(?MODULE, stop).
--endif.

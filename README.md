@@ -144,8 +144,8 @@ Catalogs must export these functions:
 ```erlang
 % Parse a specific file, returns {ok, ConfigName} when successfull
 % false is returned if parser was unable to find any terms.
--spec parse(file:filename(), package()) ->
-	{ok, Cfg} | false | {error, Reason :: term()}
+-spec parse(file:filename(), Cfg) ->
+	{ok, Cfg} | false | {error, Reason :: term()} when Cfg :: config().
 ```
 
 ## Agents

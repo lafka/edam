@@ -31,23 +31,60 @@ main(Args0) ->
 	CodePath = filename:join([Name, Name, ebin]),
 	ok = erl_prim_loader:set_path([CodePath | Paths]),
 
-	{ok, Cwd} = file:get_cwd(),
-	edm_env:set('target.path', Cwd),
+	set_default_env(),
 
 	case parse_args(Args0) of
 		[] ->
 			help();
 		Args ->
-			{ok, Cfgs0} = edm_cfg:parse(edm_env:get('target.path')),
-			edm_log:debug("Available configurations: ~p", [Cfgs0]),
+			%% edm_cfg:parse/1 returns a state where we know all the
+			%% possible locations of (possible) dependencies.
+			%% Now, try to resolve packages considering their
+			%% constraints; then continue.
+			{ok, Cfgs} = edm_cfg:parse(edm_env:get('target.path'), [save]),
 
-			Cfgs = lists:map(fun(Cfg0) ->
-				{ok, Cfg} = edm_cfg_server:get(Cfg0),
-				Cfg
-			end,  Cfgs0),
-
-			main2(Args, Cfgs)
+			main2(Args, resolve_cfgs(Cfgs))
 	end.
+
+resolve_cfgs(Cfgs) ->
+	lists:map(fun(Path) ->
+		edm_log:debug("main: found configuration ~p", [Path]),
+		{ok, Cfg} = edm_cfg_server:get(Path),
+
+		iter:foldl(fun({N, C, _} = Dep, Acc) ->
+			case edm_cat:resolve(Dep, Acc) of
+				false ->
+					edm_log:error("Failed to resolve package: ~s-~p", [N, C]),
+					Acc;
+				Pkg ->
+					edm_log:info("Resolved package ~s-~p", [N, C]),
+					resolve_pkg(Pkg, Dep, Acc)
+			end
+		end, Cfg, Cfg, deps)
+	end,  Cfgs).
+
+resolve_pkg(Pkg, {_,_,_} = Dep, Cfg0) ->
+	Deps = lists:delete(Dep, edm_cfg:get(deps, Cfg0)),
+	Cfg1 = edm_cfg:set(deps, Deps, Cfg0),
+	edm_cfg:set(resolved, [Pkg | edm_cfg:get(resolved, Cfg1)], Cfg1).
+
+
+set_default_env() ->
+	{ok, Cwd} = file:get_cwd(),
+
+	edm_env:set('target.path', Cwd),
+	edm_env:set('parsers', [
+		  edm_parser_rebar
+		, edm_parser_otp
+		, edm_parser_profile
+	]),
+	edm_env:set('catalogs', [
+		  edm_catalog_local
+		, edm_catalog_mem
+%		, edm_catalog_github
+%		, edm_catalog_sshremote
+	]),
+	ok.
 
 main2(["help"], _Cfgs) ->
 	help();

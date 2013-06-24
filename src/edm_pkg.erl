@@ -9,21 +9,21 @@
 	]).
 
 -export([
-	  get/2
+	  key/1
+	, get/2
+	, set/2
 	, set/3
 	, iter/2
 	]).
 
 -record('edm_pkg.pkg', {
 	  name :: name()
-	, absname = [] :: [binary()]
 	, pkgname :: binary()
 	, version = any :: vsn()
-	, catalog = [] :: [edm_cat:cat()]
-	, deps = [] :: [pkg()]
-	, agent = {dagent_git, []} :: {edam:agent(), AgentOpts :: [term()]}
+	, deps = [] :: [constraint()]
+	, agent = {edm_agent_git, []} :: {edam:agent(), AgentOpts :: [term()]}
 	, path :: file:filename()
-	, isolate = false :: false | file:filename_all()
+	, state = unknown :: ok | error | unknown | ignore | system
 	, template = false :: boolean()
 	}).
 
@@ -31,10 +31,23 @@
 
 -type name() :: binary().
 -type vsn() :: binary() | any.
--type attrs() :: name | absname | pkgname | version | catalog | deps |
-                    agent | {agent, atom()}| path | isolate | template.
+-type attrs() :: name | pkgname | version | catalog | deps | agent |
+                 {agent, atom()}| path | state | template.
+-type constraint() :: {edm_pkg:name(),
+	  [{edm_pkg:attrs(), term()}]
+	, [{edm_pkg:attrs(), term()}]}.
 
--export_type([pkg/0, name/0, vsn/0, attrs/0]).
+
+-export_type([pkg/0, name/0, vsn/0, attrs/0, constraint/0]).
+
+key(name)         ->  #'edm_pkg.pkg'.name;
+key(pkgname)      ->  #'edm_pkg.pkg'.pkgname;
+key(version)      ->  #'edm_pkg.pkg'.version;
+key(deps)         ->  #'edm_pkg.pkg'.deps;
+key(agent)        ->  #'edm_pkg.pkg'.agent;
+key(path)         ->  #'edm_pkg.pkg'.path;
+key(state)        ->  #'edm_pkg.pkg'.state;
+key(template)     ->  #'edm_pkg.pkg'.template.
 
 -spec new(binary()) -> #'edm_pkg.pkg'{}.
 new(Name) ->
@@ -42,23 +55,14 @@ new(Name) ->
 
 -spec new(binary(), Attrs :: [{attrs(), term()}]) -> #'edm_pkg.pkg'{}.
 new(Name, Attrs0) ->
-	BaseAttrs = [{absname, [Name]}, {name, Name}, {pkgname, Name}],
+	BaseAttrs = [{name, Name}, {pkgname, Name}],
 	Attrs = lists:ukeymerge(1
 		, lists:ukeysort(1, proplists:unfold(Attrs0))
 		, BaseAttrs),
 
-	AbsName  = proplists:get_value(absname, Attrs),
-
-	Pkg0 = lists:foldl(fun
+	lists:foldl(fun
 		({K, V}, Acc) -> set(K, V, Acc)
-	end, #'edm_pkg.pkg'{}, Attrs),
-
-	case get([isolate, absname], Pkg0) of
-		[Root, AbsName] when is_binary(Root) ->
-			dstore:new(AbsName, [{root, Root}]);
-		_ ->
-			ok
-	end.
+	end, #'edm_pkg.pkg'{}, Attrs).
 
 -spec fetch(pkg(), disli:cfg()) -> ok | {error, Reason :: term()}.
 fetch(#'edm_pkg.pkg'{agent = {Agent,_}} = Pkg, Cfg) ->
@@ -75,15 +79,6 @@ status(#'edm_pkg.pkg'{agent = {Agent,_}} = Pkg, Cfg) ->
 -spec get(attrs() | list(attrs()), pkg()) -> [term()].
 get(Attrs, Pkg) when is_list(Attrs) ->
 	[get(Attr, Pkg) || Attr <- Attrs];
-get(name, Pkg)              -> Pkg#'edm_pkg.pkg'.name;
-get(absname, Pkg)           -> Pkg#'edm_pkg.pkg'.absname;
-get(pkgname, Pkg)           -> Pkg#'edm_pkg.pkg'.pkgname;
-get(version, Pkg)           -> Pkg#'edm_pkg.pkg'.version;
-get(catalog, Pkg)           -> Pkg#'edm_pkg.pkg'.catalog;
-get(isolate, Pkg)           -> Pkg#'edm_pkg.pkg'.isolate;
-get(template, Pkg)          -> Pkg#'edm_pkg.pkg'.template;
-get(deps, Pkg)              -> Pkg#'edm_pkg.pkg'.deps;
-get(path, Pkg)              -> Pkg#'edm_pkg.pkg'.path;
 get(agent, #'edm_pkg.pkg'{agent = {Agent, _}}) -> Agent;
 get({agent, opts}, #'edm_pkg.pkg'{agent = {_, Opts}}) ->
 	Opts;
@@ -93,23 +88,24 @@ get({agent, Opt}, #'edm_pkg.pkg'{agent = {_, Opts}}) ->
 			Val;
 		false ->
 			undefined
-	end.
+	end;
+get(Key, #'edm_pkg.pkg'{} = Pkg) when is_atom(Key) ->
+	N = key(Key),
+	erlang:element(N, Pkg).
 
 -spec set(attrs(), term(), pkg()) -> none().
-set(name, Val, Pkg)         -> Pkg#'edm_pkg.pkg'{name = Val};
-set(absname, Val, Pkg)      -> Pkg#'edm_pkg.pkg'{absname = Val};
-set(pkgname, Val, Pkg)      -> Pkg#'edm_pkg.pkg'{pkgname = Val};
-set(version, Val, Pkg)      -> Pkg#'edm_pkg.pkg'{version = Val};
-set(catalog, Val, Pkg)      -> Pkg#'edm_pkg.pkg'{catalog = Val};
-set(isolate, Val, Pkg)      -> Pkg#'edm_pkg.pkg'{isolate = Val};
-set(template, Val, Pkg)     -> Pkg#'edm_pkg.pkg'{template = Val};
-set(deps, Val, Pkg)         -> Pkg#'edm_pkg.pkg'{deps = Val};
-set(path, Val, Pkg)         -> Pkg#'edm_pkg.pkg'{path = Val};
-set(agent, Val, Pkg)        -> Pkg#'edm_pkg.pkg'{agent = {Val, []}};
-set({agent, K}, Val, #'edm_pkg.pkg'{agent = {Mod, Opts}} = Pkg) ->
-	Opts = lists:keystore(K, 1, Opts, {K, Val}),
-	Pkg#'edm_pkg.pkg'{agent = {Mod, Opts}}.
+set(Attrs, Pkg) when is_list(Attrs) ->
+	lists:foldl(fun({K, V}, Acc) -> set(K, V, Acc) end, Pkg, Attrs).
 
+set(agent, Val, Pkg) -> Pkg#'edm_pkg.pkg'{agent = {Val, []}};
+set({agent, K}, Val, #'edm_pkg.pkg'{agent = {Mod, Opts0}} = Pkg) ->
+	Opts = lists:keystore(K, 1, Opts0, {K, Val}),
+	Pkg#'edm_pkg.pkg'{agent = {Mod, Opts}};
+set(Key, Val, #'edm_pkg.pkg'{} = Pkg) when is_atom(Key) ->
+	N = key(Key),
+	erlang:setelement(N, Pkg, Val).
+
+%% @todo olav 2013-06-25; Add iterator that pre-resolves each dep
 -spec iter(pkg(), '_' | deps) -> [pkg()].
 iter(Rec, '_') ->
 	iter(Rec, deps);

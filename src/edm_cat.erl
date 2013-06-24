@@ -2,21 +2,24 @@
 
 -export([
 	  new/2
+	, new/3
+	, key/1
 	, get/2
 	, set/3
+	, resolve/2
 	]).
 
 -record('edm_cat.ctl', {
 	  name :: binary() | undefined
 	, resource :: binary()
-	, opts = [] :: [{atom(), term()}]
+	, pkgopts = [] :: [{atom(), term()}] %% Options applied to pkg when resolved
 	, module :: module()
 	, pkgs = [] :: [edm_pkg:pkg()]
 	}).
 
 -opaque cat() :: #'edm_cat.ctl'{}.
 
--type catattrs() :: name | resource | module | pkgs | opts | {opt, atom()}.
+-type catattrs() :: name | resource | module | pkgs | pkgopts | {pkgopt, atom()}.
 
 -export_type([cat/0]).
 
@@ -24,6 +27,7 @@
 new(Name, Resource) ->
 	new(Name, Resource, edm_env:get('catalogs')).
 
+-spec new(binary(), binary(), [module()]) -> {ok, cat()} | false.
 new(_Name, _Resource, []) ->
 	false;
 new(Name, Resource, [Mod | T]) ->
@@ -38,25 +42,47 @@ new(Name, Resource, [Mod | T]) ->
 			new(Name, Resource, T)
 	end.
 
+-spec resolve(edm_pkg:constraint(), edm_cfg:cfg()) ->
+	{ok, edm_pkg:pkg()} | false.
+
+resolve({Name, _Constraints, Opts}, Cfg) ->
+	iter:foldl(fun
+		(Cat, false) ->
+			case get({pkg, Name}, Cat) of
+				false -> false;
+				Pkg ->
+					CatOpts = get(pkgopts, Cat),
+					edm_pkg:set(CatOpts ++ Opts, Pkg)
+			end;
+		(_Mod, Acc)  -> Acc
+	end, false, Cfg, catalogs).
+
+key(name) -> #'edm_cat.ctl'.name;
+key(resource) -> #'edm_cat.ctl'.resource;
+key(pkgopts) -> #'edm_cat.ctl'.pkgopts;
+key(module) -> #'edm_cat.ctl'.module;
+key(pkgs) -> #'edm_cat.ctl'.pkgs.
+
+
 -spec get(catattrs() | [catattrs()], #'edm_cat.ctl'{}) -> term().
 get(Attrs, Ctl) when is_list(Attrs) ->
 	[get(Attr, Ctl) || Attr <- Attrs];
-get(name, Ctl)     -> Ctl#'edm_cat.ctl'.name;
-get(resource, Ctl) -> Ctl#'edm_cat.ctl'.resource;
-get(module, Ctl)   -> Ctl#'edm_cat.ctl'.module;
-get(pkgs, Ctl)     -> Ctl#'edm_cat.ctl'.pkgs;
-get(opts, Ctl)     -> Ctl#'edm_cat.ctl'.opts;
-get({opt, Opt}, #'edm_cat.ctl'{opts = Opts}) ->
+get({pkg, P}, Ctl) ->
+	lists:keyfind(P, edm_pkg:key(name), Ctl#'edm_cat.ctl'.pkgs);
+get({pkgopt, Opt}, #'edm_cat.ctl'{pkgopts = Opts}) ->
 	case lists:keyfind(Opt, 1, Opts) of
 		{Opt, Val} ->
 			Val;
 		false ->
 			undefined
-	end.
+	end;
+get(Key, #'edm_cat.ctl'{} = Pkg) when is_atom(Key) ->
+	N = key(Key),
+	erlang:element(N, Pkg).
 
 -spec set(atom(), term(), #'edm_cat.ctl'{}) -> #'edm_cat.ctl'{}.
-set(name, Val, Ctl) -> Ctl#'edm_cat.ctl'{name = Val};
-set(resource, Val, Ctl) -> Ctl#'edm_cat.ctl'{resource = Val};
-set(pkgs, Val, Ctl) -> Ctl#'edm_cat.ctl'{pkgs = Val};
-set({opt, K}, Val, #'edm_cat.ctl'{opts = Opts} = Ctl) ->
-	Ctl#'edm_cat.ctl'{opts = lists:keystore(K, 1, Opts, {K, Val})}.
+set({pkgopt, K}, Val, #'edm_cat.ctl'{pkgopts = Opts} = Ctl) ->
+	Ctl#'edm_cat.ctl'{pkgopts = lists:keystore(K, 1, Opts, {K, Val})};
+set(Key, Val, #'edm_cat.ctl'{} = Pkg) when is_atom(Key) ->
+	N = key(Key),
+	erlang:setelement(N, Pkg, Val).

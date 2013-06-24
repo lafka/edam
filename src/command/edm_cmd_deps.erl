@@ -24,6 +24,7 @@ main(["help"], Cfgs) ->
 
 main([Cmd0 | Args], Cfgs) ->
 	Cmd = list_to_atom(Cmd0),
+	edm_log:debug("calling ~s:~s(~p, #cfg{})", [?MODULE, Cmd, Args]),
 
 	try ?MODULE:Cmd(Args, Cfgs)
 	catch error:function_clause ->
@@ -80,7 +81,7 @@ fetch(Pkgs0, Cfgs) ->
 	Pkgs1 = [list_to_binary(X) || X <- Pkgs0],
 
 	Filter = fun(Cfg) ->
-		[P || P <- edm_pkg:flatten(Cfg)
+		[P || P <- iter:flatten(Cfg, deps)
 			, lists:member(edm_pkg:get(name, P), Pkgs1)]
 	end,
 
@@ -125,11 +126,10 @@ sync2(Pkgs0) ->
 check(_Args, _Cfgs) ->
 	io:format("check check check~n").
 
-%% @todo olav 2013-06-17; take list of args corresponding to pkgs names (name or absname)
 %% @todo olav 2013-06-17; make visualization for showing dependency tree
 show(Args0, Cfgs) ->
 	Args = show_opts(Args0),
-	Attrs = edm_env:get('print.format', [absname, version, synced]),
+	Attrs = edm_env:get('print.format', [pkgname, version, state]),
 
 	show2(Args, Attrs, Cfgs).
 
@@ -154,28 +154,45 @@ show_opts([Arg | Tail], Acc) ->
 
 show2(_Args, Attrs, Cfgs) ->
 	lists:foreach(fun(Cfg) ->
-		edm_log:fmt(":: Dependencies in config ~s", edm_cfg:get([path], Cfg)),
-
-		L = length(Attrs),
 		{_, Fmt0} = lists:foldl(fun(_Key, {N, Acc}) ->
 			{N + 1, case Acc of
-				[] -> "(:~s ~~p";
-				Acc when N == L -> Acc ++ ", :~s ~~p)\n";
+				[] -> " :~s ~~p";
 				Acc -> Acc ++ ", :~s ~~p" end}
 		end, {1, []}, Attrs),
 
 		Fmt = lists:flatten(io_lib:format(Fmt0, Attrs)),
 
+		show_unresolved(Cfg),
 		print_loop(Cfg, Attrs, Fmt)
 	end, Cfgs).
 
 print_loop(Cfg, Attrs, Fmt) ->
 	case iter:length(Cfg) of
 		0 ->
-			edm_log:fmt("No dependencies in configuration ~p", edm_cfg:get([path], Cfg));
-		_ ->
-			iter:foreach(fun(P) ->
-				epm_log:fmt(Fmt, edm_pkg:get(Attrs, P)),
-				print_loop(P, Attrs, Fmt)
-			end, Cfg)
+			ok;
+		N ->
+			{Length, Output} = iter:foldl(fun(P, {I, Out} = Acc) ->
+				case edm_pkg:get(state, P) of
+					system -> Acc;
+					_ ->
+						Buf = io_lib:format(Fmt, edm_pkg:get(Attrs, P)),
+						{I + 1, [Buf | Out]}
+				end
+			end, {0, []}, Cfg, resolved),
+			edm_log:fmt("Resolved ~b dependencies in ~p"
+				, [Length, edm_cfg:get(path, Cfg)]),
+			edm_log:fmt(Output)
+	end.
+
+show_unresolved(Cfg) ->
+	case iter:length(Cfg, deps) of
+		0 ->
+			ok;
+		N ->
+			edm_log:fmt("\nWarning: ~b unresolved dependencies in ~p:"
+				, [N, edm_cfg:get(path, Cfg)]),
+			iter:foreach(fun({Name, Const, _}) ->
+				edm_log:fmt("   ~s-~p", [Name, Const])
+			end, Cfg, deps),
+			edm_log:fmt("")
 	end.

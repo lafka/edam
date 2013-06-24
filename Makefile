@@ -47,7 +47,7 @@ CT_RUN = ct_run \
 ct: ERLC_OPTS += -DTEST=1
 ct: clean compile
 	@mkdir -p logs/
-	@$(CT_RUN) -suite parser_SUITE
+	@$(CT_RUN) -suite parser_SUITE config_SUITE
 
 
 BASEDIR = $(shell basename $(PWD))
