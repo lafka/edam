@@ -21,9 +21,9 @@ doc:
 	-run edoc_run application  "'$(PROJECT)'" '"."' '[{def,{vsn,"$(VSN)"}}]'
 
 clean:
-	rm -fv ebin/*.beam
-	rm -fv .eunit/*.beam
-	rm -fv erl_crash.dump
+	@rm -fv {test,ebin}/*.beam
+	@rm -fv .eunit/*.beam
+	@rm -fv erl_crash.dump
 
 test: eunit ct
 
@@ -46,8 +46,10 @@ CT_RUN = ct_run \
 
 ct: ERLC_OPTS += -DTEST=1
 ct: clean compile
+	@rm -rf logs/
 	@mkdir -p logs/
-	@$(CT_RUN) -suite parser_SUITE config_SUITE
+	@$(CT_RUN) -suite parser_SUITE config_SUITE || true
+	@ln -s $(basename `basename $$(find logs -maxdepth 1 -type d -name 'ct_*' | head -1)`) logs/last
 
 
 BASEDIR = $(shell basename $(PWD))

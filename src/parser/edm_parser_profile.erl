@@ -71,8 +71,8 @@ expand_cat({Resource0, ModPart}) ->
 
 expand_dep(Resource0) when is_list(Resource0) ->
 	Resource = list_to_binary(Resource0),
-	Ops = [<<"==">>, <<">=">>, <<"=<">>, <<"!=">>, <<$>>>, <<$<>>, <<$->>],
-	case binary:split(Resource, Ops) of
+	Ops = [<<"==">>, <<">=">>, <<"=<">>, <<"!=">>, <<$>>>, <<$<>>, <<$->>, <<$ >>],
+	case binary:split(Resource, Ops, [trim, global]) of
 		[PkgName, Vsn] ->
 			Op = find_op(PkgName, Vsn, Resource),
 			case lists:keyfind(Op, 1, ?OP_Map) of
@@ -80,7 +80,16 @@ expand_dep(Resource0) when is_list(Resource0) ->
 				_ -> error({parser, {badop, {Op, Resource}}})
 			end;
 		[PkgName] ->
-			{PkgName, [], []}
+			{PkgName, [], []};
+		[_|_] = Out ->
+			case re:run(lists:last(Out), "^[0-9.-]*$") of
+				nomatch ->
+					{bjoin(Out, <<$->>), [], []};
+				{match, _} ->
+					[Vsn0|Name0] = lists:reverse(Out),
+					Name1 = bjoin(lists:reverse(Name0), <<$->>),
+					{Name1, [{version, eq, Vsn0}], []}
+			end
 	end;
 expand_dep({PkgName0, {Op, Vsn0}, Const, Opts}) ->
 	PkgName = atom_to_binary(PkgName0, unicode),
@@ -94,3 +103,12 @@ expand_dep({PkgName0, Vsn0, Const, Opts}) ->
 find_op(PkgName, Vsn, Resource) ->
 	{S1, S2, S3} = {size(PkgName), size(Vsn), size(Resource)},
 	binary_to_atom(binary:part(Resource, {S1, S3-S2-S1}), unicode).
+
+bjoin(P0, C) ->
+	P = [X || X <- P0, <<>> =/= X],
+	bjoin2(P, C, <<>>).
+
+bjoin2([S], _C, Acc) ->
+	<<Acc/binary, S/binary>>;
+bjoin2([S | P], C, Acc) ->
+	bjoin2(P, C, <<Acc/binary, S/binary, C/binary>>).

@@ -33,9 +33,10 @@ resource(Pkg, Ctl) ->
 name() ->
 	<<"local">>.
 
-match(<<"/", _/binary>>) -> true;
-match(<<_, ":\\", _/binary>>) -> true;
-match(<<"file://", _/binary>>) -> true;
+match(<<"./", _/binary>>) -> true;      % Unix
+match(<<"/", _/binary>>) -> true;       % Unix
+match(<<_, ":\\", _/binary>>) -> true;  % Win
+match(<<"file://", _/binary>>) -> true; % Any
 match(_) -> false.
 
 fetch(Ctl) ->
@@ -56,8 +57,8 @@ fetch(Ctl) ->
 	Ctl1 = edm_cat:set(pkgs, Pkgs, Ctl),
 	{ok, edm_cat:set(pkgs, Pkgs, Ctl1)}.
 
-% @todo olav 2013-06-26: This will now work pkgs w/patch level or file extensions
-% rewrite to use regex
+% @todo olav 2013-06-26: This will not work with archive file extensions
+%                        rewrite to use regex
 reduce_name(File) ->
 	case string:tokens(File, "-") of
 		[Name0] ->
@@ -68,7 +69,7 @@ reduce_name(File) ->
 					[lists:flatten(Out), any];
 				{match, _} ->
 					[Vsn0|Name0] = lists:reverse(Out),
-					Name1 = lists:flatten(lists:reverse(Name0)),
+					Name1 = string:join(lists:reverse(Name0), "-"),
 					[list_to_binary(X) || X <- [Name1, Vsn0]]
 			end
 	end.

@@ -170,10 +170,11 @@ print_loop(Cfg, Attrs, Fmt) ->
 	case iter:length(Cfg) of
 		0 ->
 			ok;
-		N ->
+		_ ->
 			{Length, Output} = iter:foldl(fun(P, {I, Out} = Acc) ->
 				case edm_pkg:get(state, P) of
 					system -> Acc;
+					ignore -> Acc;
 					_ ->
 						Buf = io_lib:format(Fmt, edm_pkg:get(Attrs, P)),
 						{I + 1, [Buf | Out]}
