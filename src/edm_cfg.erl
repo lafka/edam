@@ -38,11 +38,11 @@ new(Opts0, Cfg) ->
 	%% Make sure erl libs catalog is available
 	Catalogs = proplists:append_values(catalogs, Opts0),
 	LocalCat = lists:filter(fun filter_sys_libs/1, Catalogs),
+	IncludeSysLibs = edm_env:get(include_sys_libs, true),
 
 	%% @todo olav 2013-06-24; Make option for not adding local erl libs
 	Opts = if
-		length(LocalCat) > 0 -> Opts0;
-		true ->
+		length(LocalCat) == 0 andalso IncludeSysLibs ->
 			case edm_cat:new(erlang, list_to_binary(code:lib_dir())) of
 				{ok, Cat0} ->
 					Cat = edm_cat:set({pkgopt, state}, system, Cat0),
@@ -51,7 +51,8 @@ new(Opts0, Cfg) ->
 						| proplists:delete(catalogs, Opts0)];
 				false ->
 					Opts0
-			end
+			end;
+		true -> Opts0
 	end,
 
 	lists:foldl(fun

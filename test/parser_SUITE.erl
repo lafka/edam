@@ -47,6 +47,7 @@ otp_simple(_Cfg) ->
 
 profile_simple(Cfg) ->
 	edm_env:set(catalogs, [edm_catalog_local, test_cat]),
+	edm_env:set(include_sys_libs, false),
 
 	DataDir = ?config(data_dir, Cfg),
 
@@ -68,6 +69,7 @@ profile_simple(Cfg) ->
 profile_env(Cfg) ->
 	edm_env:set(catalogs, [edm_catalog_local, test_cat]),
 	edm_env:set(profile, test),
+	edm_env:set(include_sys_libs, false),
 
 	DataDir = ?config(data_dir, Cfg),
 
