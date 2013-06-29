@@ -3,8 +3,6 @@
 -export([
 	  all/0
 	, groups/0
-	, end_per_test/1
-	, init_per_test/1
 ]).
 
 -export([
@@ -25,14 +23,6 @@ groups() ->
 	, {otp, [], [otp_simple]}
 	, {profile, [], [profile_simple, profile_env]}
 	].
-
-init_per_test(Cfg) ->
-	{ok, Pid} = edm_cfg_server:start_link(),
-	[{cfg_server, Pid} | Cfg].
-
-end_per_test(Cfg) ->
-	true = exit(?config(cfg_server), normal),
-	Cfg.
 
 rebar_simple(Cfg) ->
 	edm_env:set(catalogs, [test_cat]),
@@ -56,25 +46,42 @@ otp_simple(_Cfg) ->
 	ok.
 
 profile_simple(Cfg) ->
-	edm_env:set(catalogs, [test_cat]),
+	edm_env:set(catalogs, [edm_catalog_local, test_cat]),
+
 	DataDir = ?config(data_dir, Cfg),
+
 	in_dir(DataDir, fun() ->
 		{ok, Parsed} = edm_parser_profile:parse(edm_cfg:new([{path, DataDir}])),
-		Resolved = resolve_cfg(Parsed),
-		edm_log:debug("simple: ~p", [Resolved]),
-		?assertEqual([], edm_cfg:get(deps, Resolved))
+		EdamCfg = edm_cfg:resolve(Parsed),
+
+		edm_log:debug("parsed: ~p", [EdamCfg]),
+
+		?assertEqual([], edm_cfg:get(deps, EdamCfg)),
+		?assertMatch([_,_,_], edm_cfg:get(resolved, EdamCfg)),
+
+		[_A,_B,_C] = lists:keysort(
+			  edm_pkg:key(canonical)
+			, edm_cfg:get(resolved, EdamCfg))
 	end).
 
 
 profile_env(Cfg) ->
-	edm_env:set(catalogs, [test_cat]),
+	edm_env:set(catalogs, [edm_catalog_local, test_cat]),
 	edm_env:set(profile, test),
+
 	DataDir = ?config(data_dir, Cfg),
+
 	in_dir(DataDir, fun() ->
 		{ok, Parsed} = edm_parser_profile:parse(edm_cfg:new([{path, DataDir}])),
-		[Cats, Deps] = edm_cfg:get([catalogs, deps], Parsed),
+		EdamCfg = edm_cfg:resolve(Parsed),
 
-		[Cats, Deps]
+		edm_log:debug("parsed: ~p", [EdamCfg]),
+
+		[Cats, Deps] = edm_cfg:get([catalogs, deps], EdamCfg),
+		?assertEqual([], Deps),
+		[_A,_B,_C] = edm_cfg:get(resolved, EdamCfg),
+
+		[Cats, [] ]
 	end).
 
 in_dir(Dir, Fun) ->
@@ -82,16 +89,3 @@ in_dir(Dir, Fun) ->
 	ok = file:set_cwd(Dir),
 	Fun(),
 	ok = file:set_cwd(Cwd).
-
-resolve_cfg(Cfg) ->
-	iter:foldl(fun({N, C, _} = Dep, Acc) ->
-		case edm_cat:resolve(Dep, Acc) of
-			false -> Acc;
-			Pkg -> resolve_pkg(Pkg, Dep, Acc)
-		end
-	end, Cfg, Cfg, deps).
-
-resolve_pkg(Pkg, {_,_,_} = Dep, Cfg0) ->
-	Deps = lists:delete(Dep, edm_cfg:get(deps, Cfg0)),
-	Cfg1 = edm_cfg:set(deps, Deps, Cfg0),
-	edm_cfg:set(resolved, [Pkg | edm_cfg:get(resolved, Cfg1)], Cfg1).

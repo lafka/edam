@@ -37,37 +37,19 @@ main(Args0) ->
 		[] ->
 			help();
 		Args ->
-			%% edm_cfg:parse/1 returns a state where we know all the
-			%% possible locations of (possible) dependencies.
-			%% Now, try to resolve packages considering their
-			%% constraints; then continue.
+			%% edm_cfg:parse/1 returns all required, and possible
+			%% dependencies. A second call is required to resolve
+			%% the pkgs.
 			{ok, Cfgs} = edm_cfg:parse(edm_env:get('target.path'), [save]),
 
-			main2(Args, resolve_cfgs(Cfgs))
+			ExpandCfg = fun(Path) ->
+				edm_log:debug("main: found configuration ~p", [Path]),
+				{ok, Cfg} = edm_cfg_server:get(Path),
+				edm_cfg:resolve(Cfg)
+			end,
+
+			main2(Args, lists:map(ExpandCfg, Cfgs))
 	end.
-
-resolve_cfgs(Cfgs) ->
-	lists:map(fun(Path) ->
-		edm_log:debug("main: found configuration ~p", [Path]),
-		{ok, Cfg} = edm_cfg_server:get(Path),
-
-		iter:foldl(fun({N, C, _} = Dep, Acc) ->
-			case edm_cat:resolve(Dep, Acc) of
-				false ->
-					edm_log:error("Failed to resolve package: ~s-~p", [N, C]),
-					Acc;
-				Pkg ->
-					edm_log:info("Resolved package ~s-~p", [N, C]),
-					resolve_pkg(Pkg, Dep, Acc)
-			end
-		end, Cfg, Cfg, deps)
-	end,  Cfgs).
-
-resolve_pkg(Pkg, {_,_,_} = Dep, Cfg0) ->
-	Deps = lists:delete(Dep, edm_cfg:get(deps, Cfg0)),
-	Cfg1 = edm_cfg:set(deps, Deps, Cfg0),
-	edm_cfg:set(resolved, [Pkg | edm_cfg:get(resolved, Cfg1)], Cfg1).
-
 
 set_default_env() ->
 	{ok, Cwd} = file:get_cwd(),

@@ -45,7 +45,7 @@ parseterms(Env, [{application, _App, Env, Terms} | Tail], Cfg0) ->
 
 stmt({catalogs, Cats}, Cfg) ->
 	N = edm_cat:key(resource),
-	StmtCats = lists:keysort(N, [expand_cat(C) || C <- Cats]),
+	StmtCats = lists:keysort(N, lists:foldl(fun expand_cats/2, [], Cats)),
 	CfgCats = lists:keysort(N, edm_cfg:get(catalogs, Cfg)),
 	NewCats = lists:ukeymerge(N, StmtCats, CfgCats),
 	edm_cfg:set(catalogs, NewCats, Cfg);
@@ -55,16 +55,19 @@ stmt({dependencies, Deps}, Cfg) ->
 stmt({Key, _}, _Cfg) ->
 	exit({parser, {profile, {unknown_stmt, Key}}}).
 
-expand_cat(Resource) when is_list(Resource) ->
+expand_cats(Resource, Acc) when is_list(Resource) ->
 	edm_log:debug("expand to: ~p", [Resource]),
-	{ok, Cat}  = edm_cat:new(undefined, list_to_binary(Resource)),
-	Cat;
-expand_cat({Resource0, ModPart}) ->
+	edm_log:debug("e: ~p", [edm_env:get(catalogs)]),
+	case edm_cat:new(undefined, list_to_binary(Resource)) of
+		{ok, Cat} -> [Cat | Acc];
+		false -> Acc
+	end;
+expand_cats({Resource0, ModPart}, Acc) ->
 	Resource = list_to_binary(Resource0),
 	Mods = [list_to_atom(filename:flatten([edm_catalog_, ModPart]))],
 	case edm_cat:new(undefined, Resource, Mods) of
 		{ok, Cat} ->
-			Cat;
+			[Cat | Acc];
 		false ->
 			error({parser, {badmodule, Mods}})
 	end.

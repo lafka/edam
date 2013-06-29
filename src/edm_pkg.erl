@@ -18,7 +18,8 @@
 
 -record('edm_pkg.pkg', {
 	  name :: name()
-	, pkgname :: binary()
+	, pkgname :: binary()     % real package name, as given by publisher
+	, canonical :: urn()      % canonical path e.g. "edam://pkg/<pkgname>/<vsn>
 	, version = any :: vsn()
 	, deps = [] :: [constraint()]
 	, agent = {edm_agent_git, []} :: {edam:agent(), AgentOpts :: [term()]}
@@ -36,12 +37,14 @@
 -type constraint() :: {edm_pkg:name(),
 	  [{edm_pkg:attrs(), term()}]
 	, [{edm_pkg:attrs(), term()}]}.
+-type urn() :: binary().
 
 
 -export_type([pkg/0, name/0, vsn/0, attrs/0, constraint/0]).
 
 key(name)         ->  #'edm_pkg.pkg'.name;
 key(pkgname)      ->  #'edm_pkg.pkg'.pkgname;
+key(canonical)    ->  #'edm_pkg.pkg'.canonical;
 key(version)      ->  #'edm_pkg.pkg'.version;
 key(deps)         ->  #'edm_pkg.pkg'.deps;
 key(agent)        ->  #'edm_pkg.pkg'.agent;
@@ -101,9 +104,19 @@ set(agent, Val, Pkg) -> Pkg#'edm_pkg.pkg'{agent = {Val, []}};
 set({agent, K}, Val, #'edm_pkg.pkg'{agent = {Mod, Opts0}} = Pkg) ->
 	Opts = lists:keystore(K, 1, Opts0, {K, Val}),
 	Pkg#'edm_pkg.pkg'{agent = {Mod, Opts}};
+set(version, Val, #'edm_pkg.pkg'{pkgname = PkgName} = Pkg) ->
+	Pkg#'edm_pkg.pkg'{version = Val, canonical = urn(PkgName, Val)};
+set(pkgname, Val, #'edm_pkg.pkg'{version = Vsn} = Pkg) ->
+	Pkg#'edm_pkg.pkg'{pkgname = Val, canonical = urn(Val, Vsn)};
 set(Key, Val, #'edm_pkg.pkg'{} = Pkg) when is_atom(Key) ->
 	N = key(Key),
 	erlang:setelement(N, Pkg, Val).
+
+urn(Name, any) ->
+	urn(Name, <<>>);
+urn(Name, Vsn) ->
+	Suffix = case Vsn of <<>> -> <<>>; Vsn -> <<"/", Vsn/binary>> end,
+	<<"edam:pkg/", Name/binary, Suffix/binary>>.
 
 %% @todo olav 2013-06-25; Add iterator that pre-resolves each dep
 -spec iter(pkg(), '_' | deps) -> [pkg()].

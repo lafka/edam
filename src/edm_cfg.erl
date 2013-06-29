@@ -20,6 +20,7 @@
 	  new/1
 	, parse/1
 	, parse/2
+	, resolve/1
 	, save/1
 	, configs/0
 	, key/1
@@ -86,6 +87,37 @@ parse(Path0, Opts) ->
 	lists:member(save, Opts) andalso (ok = save(NewCfg)),
 
 	configs().
+
+resolve(Cfg) ->
+	iter:foldl(fun({N, C, _} = Dep, Acc) ->
+		case edm_cat:resolve(Dep, Acc) of
+			false ->
+				edm_log:error("Failed to resolve package: ~s-~p", [N, C]),
+				Acc;
+			Pkg ->
+				Canonical = edm_pkg:get(canonical, Pkg),
+				Resolved = get(resolved, Acc),
+
+				case lists:member(Canonical, Resolved) of
+					true ->
+						edm_log:debug("Previously resolved pkg ~p", [Pkg]),
+						Acc;
+					false ->
+						edm_log:debug("Resolved package ~s-~p", [N, C]),
+						resolve_pkg(Pkg, Dep, Acc)
+				end
+		end
+	end, Cfg, Cfg, deps).
+
+resolve_pkg(Pkg, {_,_,_} = Dep, Cfg0) ->
+	Deps = lists:delete(Dep, edm_cfg:get(deps, Cfg0)),
+	Cfg1 = set(deps, Deps, Cfg0),
+
+	Canonical = edm_pkg:get(canonical, Pkg),
+	Key = edm_pkg:key(canonical),
+	Resolved = lists:keystore(Canonical, Key, get(resolved, Cfg1), Pkg),
+
+	set(resolved, Resolved, Cfg1).
 
 configs() ->
 	gen_server:call(?ref, {config, list}).
