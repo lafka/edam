@@ -15,6 +15,8 @@
 -include_lib("common_test/include/ct.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
+-define(testpkg, <<"_test_root">>).
+
 all() ->
 	[{group, rebar}, {group, otp}, {group, profile}].
 
@@ -26,8 +28,13 @@ groups() ->
 
 rebar_simple(Cfg) ->
 	edm_env:set(catalogs, [test_cat]),
+	edm_env:set('target.name', ?testpkg),
+
 	DataDir = ?config(data_dir, Cfg),
-	{ok, Parsed} = edm_parser_rebar:parse(edm_cfg:new([{path, DataDir}])),
+
+	{ok, Parsed} = edm_parser_rebar:parse(
+		  edm_cfg:new([{path, DataDir}])
+		, ?testpkg),
 
 	DepConstraints = [{vsn, regex, "0.1.0"}],
 	DepOpts = [
@@ -35,7 +42,7 @@ rebar_simple(Cfg) ->
 		, {{agent,remote}, <<"test://github.com/lafka/dep">>}
 	],
 
-	Deps = edm_cfg:get(deps, Parsed),
+	Deps = edm_cfg:iter(Parsed, deps),
 	?assertMatch([{<<"dep">>, DepConstraints, DepOpts}], Deps),
 
 	Cats = edm_cfg:get(catalogs, Parsed),
@@ -48,21 +55,26 @@ otp_simple(_Cfg) ->
 profile_simple(Cfg) ->
 	edm_env:set(catalogs, [edm_catalog_local, test_cat]),
 	edm_env:set(include_sys_libs, false),
+	edm_env:set('target.name', ?testpkg),
 
 	DataDir = ?config(data_dir, Cfg),
 
 	in_dir(DataDir, fun() ->
-		{ok, Parsed} = edm_parser_profile:parse(edm_cfg:new([{path, DataDir}])),
-		EdamCfg = edm_cfg:resolve(Parsed),
+		{ok, EdamCfg} = edm_parser_profile:parse(
+			  edm_cfg:new([{path, DataDir}])
+			, ?testpkg),
 
-		edm_log:debug("parsed: ~p", [EdamCfg]),
+		?assertEqual([], edm_cfg:iter(EdamCfg, unresolved)),
 
-		?assertEqual([], edm_cfg:get(deps, EdamCfg)),
-		?assertMatch([_,_,_], edm_cfg:get(resolved, EdamCfg)),
+		Deps = [edm_pkg:get([name, version], P) || P
+			<- edm_cfg:iter(EdamCfg, resolved)],
 
-		[_A,_B,_C] = lists:keysort(
-			  edm_pkg:key(canonical)
-			, edm_cfg:get(resolved, EdamCfg))
+		?assertMatch(
+			[ [<<"dep">>,   <<"0.1.0">>]
+			, [<<"dep-b">>, <<"0.2.0">>]
+			, [<<"dep-c">>, <<"0.9.1">>]]
+		, Deps)
+
 	end).
 
 
@@ -70,20 +82,25 @@ profile_env(Cfg) ->
 	edm_env:set(catalogs, [edm_catalog_local, test_cat]),
 	edm_env:set(profile, test),
 	edm_env:set(include_sys_libs, false),
+	edm_env:set('target.name', ?testpkg),
 
 	DataDir = ?config(data_dir, Cfg),
 
 	in_dir(DataDir, fun() ->
-		{ok, Parsed} = edm_parser_profile:parse(edm_cfg:new([{path, DataDir}])),
-		EdamCfg = edm_cfg:resolve(Parsed),
+		{ok, EdamCfg} = edm_parser_profile:parse(
+			  edm_cfg:new([{path, DataDir}])
+			, ?testpkg),
 
-		edm_log:debug("parsed: ~p", [EdamCfg]),
+		?assertEqual([], edm_cfg:iter(EdamCfg, unresolved)),
 
-		[Cats, Deps] = edm_cfg:get([catalogs, deps], EdamCfg),
-		?assertEqual([], Deps),
-		[_A,_B,_C] = edm_cfg:get(resolved, EdamCfg),
+		Deps = [edm_pkg:get([name, version], P) || P
+			<- edm_cfg:iter(EdamCfg, resolved)],
 
-		[Cats, [] ]
+		?assertMatch(
+			[ [<<"dep">>,   <<"0.1.0">>]
+			, [<<"dep-b">>, <<"0.3.0">>]
+			, [<<"dep-c">>, <<"1.0.1">>]]
+		, Deps)
 	end).
 
 in_dir(Dir, Fun) ->

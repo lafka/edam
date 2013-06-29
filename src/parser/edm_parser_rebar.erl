@@ -1,10 +1,10 @@
 -module(edm_parser_rebar).
 
 -export([
-	  parse/1
+	  parse/2
 ]).
 
-parse(Cfg) ->
+parse(Cfg, ParentRef) ->
 	Path = edm_cfg:get(path, Cfg),
 	File = filename:join(Path, "rebar.config"),
 
@@ -13,7 +13,7 @@ parse(Cfg) ->
 			Deps = proplists:get_value(deps, Terms, []),
 			NewCfg = lists:foldl(fun({_, _, Src} = Dep, Acc) ->
 				URL = list_to_binary(erlang:element(2, Src)),
-				append(URL, Dep, Acc)
+				append(ParentRef, URL, Dep, Acc)
 			end, Cfg, Deps),
 			{ok, NewCfg};
 		{error, enoent} ->
@@ -22,14 +22,14 @@ parse(Cfg) ->
 			exit({parser, {consult, Err}})
 	end.
 
-append(URL, Dep, Cfg0) ->
+append(ParentRef, URL, Dep, Cfg0) ->
 	Cfg = case edm_cat:new(undefined, URL) of
 		{ok, Cat} ->
 			edm_cfg:set(catalogs, [Cat | edm_cfg:get(catalogs, Cfg0)], Cfg0);
 		false ->
 			Cfg0 end,
 
-	edm_cfg:set(deps, [dep(Dep) | edm_cfg:get(deps, Cfg)], Cfg).
+	edm_cfg:append_dep(dep(Dep), ParentRef, Cfg).
 
 dep({Name, VsnRegex, Src}) ->
 	{ok, {Remote, Ref}} = ref(Src),

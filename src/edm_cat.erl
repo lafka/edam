@@ -42,20 +42,24 @@ new(Name, Resource, [Mod | T]) ->
 			new(Name, Resource, T)
 	end.
 
--spec resolve(edm_pkg:constraint(), edm_cfg:cfg()) ->
-	{ok, edm_pkg:pkg()} | false.
+-spec resolve(edm_pkg:constraint(), edm_cfg:cfg()) -> [edm_pkg:pkg()].
 
-resolve({Name, _Constraints, Opts}, Cfg) ->
-	iter:foldl(fun
-		(Cat, false) ->
-			case get({pkg, Name}, Cat) of
-				false -> false;
-				Pkg ->
-					CatOpts = get(pkgopts, Cat),
-					edm_pkg:set(CatOpts ++ Opts, Pkg)
-			end;
-		(_Mod, Acc)  -> Acc
-	end, false, Cfg, catalogs).
+resolve({Name, Constraints, Opts}, Cfg) ->
+	iter:foldl(fun(Cat, Acc) ->
+		case get({pkg, Name}, Cat) of
+			false -> false;
+			Pkg0 ->
+				case edm_pkg:constrained(Pkg0, Constraints) of
+					true ->
+						Acc;
+					false ->
+						CatOpts = get(pkgopts, Cat),
+						Pkg = edm_pkg:set(CatOpts ++ Opts, Pkg0),
+
+						[Pkg | Acc]
+				end
+		end
+	end, [], Cfg, catalogs).
 
 key(name) -> #'edm_cat.ctl'.name;
 key(resource) -> #'edm_cat.ctl'.resource;

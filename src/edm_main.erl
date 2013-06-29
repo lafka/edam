@@ -37,15 +37,12 @@ main(Args0) ->
 		[] ->
 			help();
 		Args ->
-			%% edm_cfg:parse/1 returns all required, and possible
-			%% dependencies. A second call is required to resolve
-			%% the pkgs.
 			{ok, Cfgs} = edm_cfg:parse(edm_env:get('target.path'), [save]),
 
 			ExpandCfg = fun(Path) ->
 				edm_log:debug("main: found configuration ~p", [Path]),
 				{ok, Cfg} = edm_cfg_server:get(Path),
-				edm_cfg:resolve(Cfg)
+				Cfg
 			end,
 
 			main2(Args, lists:map(ExpandCfg, Cfgs))

@@ -7,11 +7,12 @@
 -module(edm_parser_otp).
 
 -export([
-	  parse/1
+	  parse/2
+	, getpkg/1
 ]).
 
 %% @todo olav 2013-06-24; Write tests for apps/* style projects,
-parse(Cfg) ->
+parse(Cfg, ParentRef) ->
 	Path = edm_cfg:get(path, Cfg),
 	Wildcard = filename:join([Path, "{ebin,apps}", "**.app"]),
 
@@ -24,14 +25,18 @@ parse(Cfg) ->
 
 
 		{PkgConst, Cat} = parsefile(File),
-		Apps = edm_cfg:get(deps, Acc) ++ PkgConst,
 		Cats = edm_cfg:get(catalogs, Acc) ++ [Cat],
 
 		edm_cfg:set(catalogs, Cats,
-			  edm_cfg:set(deps, Apps, Acc))
+			  edm_cfg:append_dep(PkgConst, ParentRef, Acc))
 	end, Cfg, Files),
 
 	{ok, NewCfg}.
+
+getpkg(File) ->
+	{_Deps, Ctl} = parsefile(File),
+	[Pkg] = edm_cat:get(pkgs, Ctl),
+	Pkg.
 
 parsefile(File) ->
 	{ok, [{application, Name, Terms}]} = file:consult(File),

@@ -1,13 +1,13 @@
 -module(edm_parser_profile).
 
 -export([
-	  parse/1
+	  parse/2
 ]).
 
--define(OP_Map, [{'==', eq}, {'>=', ge}, {'=<', le}, {'!=', ne},
-				{'>', gt}, {'<', lt}, {'-', eq}]).
+-define(OP_Map, [{<<"==">>, eq}, {<<">=">>, ge}, {<<"=<">>, le}, {<<"!=">>, ne},
+				{<<">">>, gt}, {<<"<">>, lt}, {<<"-">>, eq}]).
 
-parse(Cfg0) ->
+parse(Cfg0, ParentRef) ->
 	Path = edm_cfg:get(path, Cfg0),
 	Profile = edm_env:get(profile, default),
 	ProfileTarget = filename:flatten([Profile, ".config"]),
@@ -21,7 +21,7 @@ parse(Cfg0) ->
 		case file:consult(File) of
 			{ok, Terms} ->
 				edm_log:debug("parser:profile: found ~s", [File]),
-				parseterms(Profile, Terms, Acc);
+				parseterms(ParentRef, Profile, Terms, Acc);
 			{error, enoent} ->
 				Acc;
 			{error, {_, _, _} = Err} ->
@@ -32,32 +32,32 @@ parse(Cfg0) ->
 
 	{ok, Cfg}.
 
-parseterms(_Env, [], Cfg) ->
+parseterms(_ParentRef, _Env, [], Cfg) ->
 	Cfg;
-parseterms(Env, [{application, App, Terms} | Tail], Cfg) ->
-	parseterms(Env, [{application, App, Env, Terms} | Tail], Cfg);
-parseterms(EnvA, [{application, _App, EnvB, _Terms} | Tail], Cfg)
+parseterms(ParentRef, Env, [{application, App, Terms} | Tail], Cfg) ->
+	parseterms(ParentRef, Env, [{application, App, Env, Terms} | Tail], Cfg);
+parseterms(ParentRef, EnvA, [{application, _App, EnvB, _Terms} | Tail], Cfg)
 	when EnvA =/= EnvB ->
-	parseterms(EnvA, Tail, Cfg);
-parseterms(Env, [{application, _App, Env, Terms} | Tail], Cfg0) ->
-	Cfg = lists:foldl(fun stmt/2, Cfg0, Terms),
-	parseterms(Env, Tail, Cfg).
+	parseterms(ParentRef, EnvA, Tail, Cfg);
+parseterms(ParentRef, Env, [{application, _App, Env, Terms} | Tail], Cfg0) ->
+	{ParentRef, Cfg} = lists:foldl(fun stmt/2, {ParentRef, Cfg0}, Terms),
+	parseterms(ParentRef, Env, Tail, Cfg).
 
-stmt({catalogs, Cats}, Cfg) ->
+stmt({catalogs, Cats}, {ParentRef, Cfg}) ->
 	N = edm_cat:key(resource),
 	StmtCats = lists:keysort(N, lists:foldl(fun expand_cats/2, [], Cats)),
 	CfgCats = lists:keysort(N, edm_cfg:get(catalogs, Cfg)),
 	NewCats = lists:ukeymerge(N, StmtCats, CfgCats),
-	edm_cfg:set(catalogs, NewCats, Cfg);
-stmt({dependencies, Deps}, Cfg) ->
-	NewDeps = edm_cfg:get(deps, Cfg) ++ [expand_dep(D) || D <- Deps],
-	edm_cfg:set(deps, NewDeps, Cfg);
+	{ParentRef, edm_cfg:set(catalogs, NewCats, Cfg)};
+stmt({dependencies, Deps}, Acc) ->
+	lists:foldl(fun(Dep, {ParentRef, Cfg0}) ->
+		Cfg = edm_cfg:append_dep(expand_dep(Dep), ParentRef, Cfg0),
+		{ParentRef, Cfg}
+	end, Acc, Deps);
 stmt({Key, _}, _Cfg) ->
 	exit({parser, {profile, {unknown_stmt, Key}}}).
 
 expand_cats(Resource, Acc) when is_list(Resource) ->
-	edm_log:debug("expand to: ~p", [Resource]),
-	edm_log:debug("e: ~p", [edm_env:get(catalogs)]),
 	case edm_cat:new(undefined, list_to_binary(Resource)) of
 		{ok, Cat} -> [Cat | Acc];
 		false -> Acc
@@ -74,7 +74,8 @@ expand_cats({Resource0, ModPart}, Acc) ->
 
 expand_dep(Resource0) when is_list(Resource0) ->
 	Resource = list_to_binary(Resource0),
-	Ops = [<<"==">>, <<">=">>, <<"=<">>, <<"!=">>, <<$>>>, <<$<>>, <<$->>, <<$ >>],
+	Ops = [ O || {O, _} <- ?OP_Map],
+
 	case binary:split(Resource, Ops, [trim, global]) of
 		[PkgName, Vsn] ->
 			Op = find_op(PkgName, Vsn, Resource),
@@ -105,7 +106,7 @@ expand_dep({PkgName0, Vsn0, Const, Opts}) ->
 
 find_op(PkgName, Vsn, Resource) ->
 	{S1, S2, S3} = {size(PkgName), size(Vsn), size(Resource)},
-	binary_to_atom(binary:part(Resource, {S1, S3-S2-S1}), unicode).
+	binary:part(Resource, {S1, S3-S2-S1}).
 
 bjoin(P0, C) ->
 	P = [X || X <- P0, <<>> =/= X],

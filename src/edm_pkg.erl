@@ -6,6 +6,7 @@
 	, fetch/2
 	, sync/2
 	, status/2
+	, constrained/2
 	]).
 
 -export([
@@ -38,6 +39,7 @@
 	  [{edm_pkg:attrs(), term()}]
 	, [{edm_pkg:attrs(), term()}]}.
 -type urn() :: binary().
+-type op() :: eq | ge | le | ne | gt | lt.
 
 
 -export_type([pkg/0, name/0, vsn/0, attrs/0, constraint/0]).
@@ -78,6 +80,25 @@ sync(#'edm_pkg.pkg'{agent = {Agent,_}} = Pkg, Cfg) ->
 -spec status(pkg(), disli:cfg()) -> ok | stale | {error, Reason :: term()}.
 status(#'edm_pkg.pkg'{agent = {Agent,_}} = Pkg, Cfg) ->
 	Agent:status(Pkg, Cfg).
+
+-spec constrained(pkg(), [{attrs(), term()} | {attrs(), op(), term()}])
+	-> boolean().
+constrained(_Pkg, []) ->
+	false;
+constrained(Pkg, [{Key, Val}| Tail]) ->
+	not (edm_pkg:get(Key, Pkg) =:= Val) orelse constrained(Pkg, Tail);
+constrained(Pkg, [{Key, eq, Val} | Tail]) ->
+	not (edm_pkg:get(Key, Pkg) =:= Val) orelse constrained(Pkg, Tail);
+constrained(Pkg, [{Key, ne, Val} | Tail]) ->
+	not (edm_pkg:get(Key, Pkg) =/= Val) orelse constrained(Pkg, Tail);
+constrained(Pkg, [{Key, ge, Val} | Tail]) ->
+	not (edm_pkg:get(Key, Pkg)  >= Val) orelse constrained(Pkg, Tail);
+constrained(Pkg, [{Key, le, Val} | Tail]) ->
+	not (edm_pkg:get(Key, Pkg)  =< Val) orelse constrained(Pkg, Tail);
+constrained(Pkg, [{Key, gt, Val} | Tail]) ->
+	not (edm_pkg:get(Key, Pkg)  >  Val) orelse constrained(Pkg, Tail);
+constrained(Pkg, [{Key, lt, Val} | Tail]) ->
+	not (edm_pkg:get(Key, Pkg)  <  Val) orelse constrained(Pkg, Tail).
 
 -spec get(attrs() | list(attrs()), pkg()) -> [term()].
 get(Attrs, Pkg) when is_list(Attrs) ->
