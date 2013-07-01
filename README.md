@@ -1,3 +1,9 @@
+# NOTE:
+
+This project is in the process of being renamed to edam. Please check
+out branch 0.3.0 ( https://github.com/lafka/edam/tree/0.3.0 ) for most
+up-to-date code/info etc.
+
 # Introduction
 
 Todays state of erlang dependency manager is not optimal.
