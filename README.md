@@ -1,3 +1,8 @@
+# Deprecation
+
+Mix, Rebar and Erlang.mk does a much better job. This is no longer maintained.
+
+
 # NOTE:
 
 This project is in the process of being renamed to edam. Please check
